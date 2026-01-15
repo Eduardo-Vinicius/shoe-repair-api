@@ -12,7 +12,7 @@ const statusRoutes = require('./src/routes/statusRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
 
 const app = express();
-app.use(cors());
+app.use(cors({origin: true}));
 app.use(express.json());
 
 // Middleware para logs de todas as requisições
