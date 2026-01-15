@@ -1,4 +1,5 @@
 const pedidoService = require('../services/pedidoService');
+const clienteService = require('../services/clienteService');
 const { enviarStatusPedido } = require('../services/whatsappService');
 const pdfService = require('../services/pdfService');
 
@@ -39,6 +40,7 @@ exports.listPedidosStatus = async (req, res) => {
     // Transformar pedidos para o formato esperado pelo frontend
     const pedidosFormatados = pedidos.map(pedido => ({
       id: pedido.id,
+      codigo: pedido.codigo, // Código sequencial legível
       clientName: pedido.nomeCliente || pedido.clientName,
       clientCpf: pedido.cpfCliente || pedido.clientCpf,
       sneaker: pedido.modeloTenis || pedido.sneaker,
@@ -194,6 +196,34 @@ exports.createPedido = async (req, res) => {
     };
 
     const novoPedido = await pedidoService.createPedido(dadosPedido);
+    
+    // Enviar notificação WhatsApp para o cliente sobre a criação do pedido
+    try {
+      console.log('[PedidoController] Enviando notificação WhatsApp para criação do pedido...');
+      
+      // Buscar dados do cliente
+      const cliente = await clienteService.getCliente(clienteId);
+      if (cliente && cliente.telefone && cliente.nome) {
+        const descricaoServicos = servicos.map(s => s.nome).join(', ');
+        await enviarStatusPedido(
+          cliente.telefone,
+          cliente.nome,
+          'criado',
+          descricaoServicos,
+          modeloTenis
+        );
+        console.log('[PedidoController] Notificação WhatsApp de criação enviada com sucesso');
+      } else {
+        console.log('[PedidoController] Dados do cliente insuficientes para envio WhatsApp:', {
+          clienteEncontrado: !!cliente,
+          telefone: cliente ? !!cliente.telefone : false,
+          nome: cliente ? !!cliente.nome : false
+        });
+      }
+    } catch (whatsappError) {
+      console.error('[PedidoController] Erro ao enviar WhatsApp de criação:', whatsappError);
+      // Não falhar a operação por erro no WhatsApp
+    }
     
     res.status(201).json({
       success: true,
@@ -394,22 +424,22 @@ exports.patchPedido = async (req, res) => {
       try {
         console.log('[PedidoController] Enviando notificação WhatsApp para mudança de status...');
         
-        // Buscar dados do cliente se necessário
-        const { nomeCliente, telefoneCliente, modeloTenis, descricaoServicos } = pedidoAtualizado;
-        
-        if (telefoneCliente && nomeCliente) {
+        // Buscar dados do cliente
+        const cliente = await clienteService.getCliente(pedidoAtualizado.clienteId);
+        if (cliente && cliente.telefone && cliente.nome) {
           await enviarStatusPedido(
-            telefoneCliente, 
-            nomeCliente, 
-            updatesPermitidos.status, 
-            descricaoServicos || 'Serviços diversos', 
-            modeloTenis || 'Tênis'
+            cliente.telefone,
+            cliente.nome,
+            updatesPermitidos.status,
+            pedidoAtualizado.descricaoServicos || pedidoAtualizado.servicos?.map(s => s.nome).join(', ') || 'Serviços diversos',
+            pedidoAtualizado.modeloTenis || 'Tênis'
           );
           console.log('[PedidoController] Notificação WhatsApp enviada com sucesso');
         } else {
-          console.log('[PedidoController] Dados insuficientes para envio WhatsApp:', {
-            telefone: !!telefoneCliente,
-            nome: !!nomeCliente
+          console.log('[PedidoController] Dados do cliente insuficientes para envio WhatsApp:', {
+            clienteEncontrado: !!cliente,
+            telefone: cliente ? !!cliente.telefone : false,
+            nome: cliente ? !!cliente.nome : false
           });
         }
       } catch (whatsappError) {
@@ -521,14 +551,26 @@ exports.updatePedidoStatus = async (req, res) => {
     }
 
     // Enviar notificação via WhatsApp se os dados necessários estiverem disponíveis
-    if (atualizado.telefoneCliente && atualizado.nomeCliente) {
-      try {
-        const { telefoneCliente, nomeCliente, descricaoServicos, modeloTenis } = atualizado;
-        await enviarStatusPedido(telefoneCliente, nomeCliente, status, descricaoServicos, modeloTenis);
-      } catch (whatsappError) {
-        console.error('Erro ao enviar WhatsApp:', whatsappError);
-        // Não falha a requisição se o WhatsApp der erro
+    try {
+      const cliente = await clienteService.getCliente(atualizado.clienteId);
+      if (cliente && cliente.telefone && cliente.nome) {
+        await enviarStatusPedido(
+          cliente.telefone,
+          cliente.nome,
+          status,
+          atualizado.descricaoServicos || atualizado.servicos?.map(s => s.nome).join(', ') || 'Serviços diversos',
+          atualizado.modeloTenis || 'Tênis'
+        );
+      } else {
+        console.log('[PedidoController] Dados do cliente insuficientes para envio WhatsApp:', {
+          clienteEncontrado: !!cliente,
+          telefone: cliente ? !!cliente.telefone : false,
+          nome: cliente ? !!cliente.nome : false
+        });
       }
+    } catch (whatsappError) {
+      console.error('[PedidoController] Erro ao enviar WhatsApp:', whatsappError);
+      // Não falha a requisição se o WhatsApp der erro
     }
 
     res.status(200).json({
