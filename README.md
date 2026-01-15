@@ -83,9 +83,6 @@ curl -X POST http://localhost:3000/pedidos \
 └── .github/workflows/deploy-cfn.yml
 ```
 
-
-
-
 ## Como subir o projeto (Deploy na AWS)
 
 ### 1. Pré-requisitos
