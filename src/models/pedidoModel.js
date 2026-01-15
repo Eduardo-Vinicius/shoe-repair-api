@@ -1,6 +1,7 @@
 // Modelo de pedido para shoe repair
 module.exports = {
   id: String,
+  codigo: String, // Código sequencial legível (ex: 20260115-001)
   clienteId: String,
   clientName: String, // Nome do cliente
   modeloTenis: String,

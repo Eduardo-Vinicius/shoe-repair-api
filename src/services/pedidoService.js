@@ -4,6 +4,68 @@ const tableName = process.env.DYNAMODB_PEDIDO_TABLE || 'shoeRepairPedidos';
 
 const dynamoDb = new AWS.DynamoDB.DocumentClient({ region: process.env.AWS_REGION });
 
+/**
+ * Gera um código sequencial CURTO e LEGÍVEL para o pedido
+ * Estratégia: Contador por hora com sharding para escalabilidade
+ * Formato: YYYYMMDD-HH-XXX (ex: 20260115-14-001)
+ *
+ * Vantagens:
+ * - Curto e legível (14 caracteres)
+ * - Sequencial por hora (001, 002, 003...)
+ * - Baixa contenção (sharding por hora)
+ * - Fácil para uso diário
+ */
+async function gerarCodigoPedido() {
+  const now = new Date();
+  const dataKey = now.toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
+  const horaKey = now.getHours().toString().padStart(2, '0'); // HH (00-23)
+
+  // Sharding por hora: cada hora tem seu próprio contador
+  // Isso reduz drasticamente a contenção
+  const counterId = `pedido-${dataKey}-${horaKey}`;
+
+  try {
+    // Tenta incrementar o contador atômico para hora atual
+    const params = {
+      TableName: 'ShoeRepairCounters',
+      Key: { id: counterId },
+      UpdateExpression: 'ADD #count :incr',
+      ExpressionAttributeNames: {
+        '#count': 'count'
+      },
+      ExpressionAttributeValues: {
+        ':incr': 1
+      },
+      ReturnValues: 'ALL_NEW'
+    };
+
+    const result = await dynamoDb.update(params).promise();
+    const sequencial = result.Attributes.count;
+
+    // Formato legível: 20260115-14-001
+    const codigo = `${dataKey}-${horaKey}-${String(sequencial).padStart(3, '0')}`;
+
+    console.log(`[PedidoService] Código curto gerado: ${codigo}`, {
+      data: dataKey,
+      hora: horaKey,
+      sequencial: sequencial
+    });
+
+    return codigo;
+
+  } catch (error) {
+    // Se a tabela não existe ou erro, fallback para timestamp curto
+    console.warn('[PedidoService] Fallback para timestamp curto devido a erro:', error.message);
+
+    const timestamp = Date.now();
+    const shortCode = timestamp.toString().slice(-6); // Últimos 6 dígitos
+    const codigo = `${dataKey}-${shortCode}`;
+
+    console.log(`[PedidoService] Código fallback gerado: ${codigo}`);
+    return codigo;
+  }
+}
+
 exports.listPedidos = async () => {
   const params = { TableName: tableName };
   const data = await dynamoDb.scan(params).promise();
@@ -18,22 +80,12 @@ exports.getPedido = async (id) => {
 
 exports.createPedido = async (pedido) => {
   // Estruturar o pedido com todos os campos necessários
-  // Gera um ID no formato: MMDDYYYYXXXX (XXXX = 4 caracteres alfanuméricos)
-  function gerarIdPedido() {
-    const now = new Date();
-    const mes = String(now.getMonth() + 1).padStart(2, '0');
-    const dia = String(now.getDate()).padStart(2, '0');
-    const ano = String(now.getFullYear());
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let aleatorio = '';
-    for (let i = 0; i < 4; i++) {
-      aleatorio += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return `${mes}${dia}${ano}${aleatorio}`;
-  }
+  // Gera um código sequencial para o pedido
+  const codigoPedido = await gerarCodigoPedido();
 
   const novoPedido = { 
-    id: gerarIdPedido(),
+    id: uuidv4(), // Mantém o UUID como chave primária interna
+    codigo: codigoPedido, // Novo campo com código sequencial legível
     clienteId: pedido.clienteId,
     clientName: pedido.clientName,
     modeloTenis: pedido.modeloTenis,

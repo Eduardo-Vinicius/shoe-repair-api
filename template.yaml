@@ -24,6 +24,7 @@ Resources:
         Variables:
           DYNAMODB_CLIENTE_TABLE: !Ref ShoeRepairClientesTable
           DYNAMODB_PEDIDO_TABLE: !Ref ShoeRepairPedidosTable
+          DYNAMODB_COUNTER_TABLE: !Ref ShoeRepairCountersTable
           S3_BUCKET_NAME: !Ref ShoeRepairFotosBucket
           DYNAMODB_USER_TABLE: !Ref ShoeRepairUsersTable
           JWT_SECRET: !Ref JWTSecret
@@ -139,6 +140,17 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: ShoeRepairPedidos
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+  ShoeRepairCountersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ShoeRepairCounters
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S

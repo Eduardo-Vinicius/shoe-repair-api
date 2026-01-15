@@ -22,7 +22,39 @@ function gerarTemplateStatusPedido(nomeCliente, status, descricaoServicos, model
   const statusLower = status.toLowerCase();
   console.log('[WhatsApp] Status normalizado:', statusLower);
 
-  if (statusLower === 'concluido' || statusLower === 'finalizado') {
+  if (statusLower === 'criado' || statusLower === 'created') {
+    console.log('[WhatsApp] Tipo de template: order_created');
+    return {
+      type: "template",
+      template: {
+        name: "order_created",
+        language: {
+          code: "pt_BR"
+        },
+        components: [
+          {
+            type: "body",
+            parameters: [
+              {
+                type: "text",
+                text: nomeCliente
+              },
+              {
+                type: "text",
+                text: descricaoServicos
+              },
+              {
+                type: "text",
+                text: modeloTenis
+              }
+            ]
+          }
+        ]
+      }
+    };
+  }
+
+  if (statusLower === 'concluido' || statusLower === 'finalizado' || statusLower.includes('finalizado')) {
     console.log('[WhatsApp] Tipo de template: order_status_update_finish');
     return {
       type: "template",
