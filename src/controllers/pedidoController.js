@@ -399,6 +399,18 @@ exports.patchPedido = async (req, res) => {
             pedidoAtualizado.modeloTenis || 'Tênis'
           );
           console.log('[PedidoController] Notificação WhatsApp enviada com sucesso');
+
+          // Enviar mensagem adicional quando o pedido for finalizado
+          if (updatesPermitidos.status === 'Atendimento - Finalizado' || updatesPermitidos.status === 'Atendimento - Entregue') {
+            console.log('[PedidoController] Enviando notificação adicional de finalização...');
+            await enviarStatusPedido(
+              cliente.telefone,
+              cliente.nome,
+              'finalizado',
+              pedidoAtualizado.descricaoServicos || pedidoAtualizado.servicos?.map(s => s.nome).join(', ') || 'Serviços diversos',
+              pedidoAtualizado.modeloTenis || 'Tênis'
+            );
+          }
         } else {
           console.log('[PedidoController] Dados do cliente insuficientes para envio WhatsApp:', {
             clienteEncontrado: !!cliente,

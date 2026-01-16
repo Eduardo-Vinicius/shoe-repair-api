@@ -68,6 +68,50 @@ curl -X POST http://localhost:3000/pedidos \
 ✅ **Notificações WhatsApp** - Atualizações automáticas de status  
 ✅ **Dashboard Analytics** - Métricas e indicadores de performance
 
+---
+
+## 📱 Configuração do WhatsApp
+
+O sistema envia notificações automáticas via WhatsApp para os clientes quando:
+
+- **Criação do pedido** - Confirmação com detalhes dos serviços
+- **Mudança de status** - Atualização do progresso (Em andamento, Concluído, etc.)
+- **Finalização** - Notificação especial quando o pedido é finalizado
+
+### Como configurar:
+
+1. **Criar app no Facebook Developers:**
+   - Acesse [Facebook Developers](https://developers.facebook.com/)
+   - Crie um novo app e selecione "WhatsApp" como produto
+
+2. **Configurar WhatsApp Business API:**
+   - No painel do app, vá para "WhatsApp" > "API Setup"
+   - Copie o `WHATSAPP_TOKEN` e `WHATSAPP_PHONE_NUMBER_ID`
+
+3. **Criar templates de mensagem:**
+   Crie estes templates no WhatsApp Manager:
+   - `order_created` - Para novos pedidos
+   - `order_status_update_finish` - Para finalização
+   - `update_status_in_progress` - Para andamento
+
+4. **Configurar variáveis de ambiente:**
+   ```bash
+   cp .env.example .env
+   # Edite o .env com suas credenciais
+   ```
+
+5. **Testar a integração:**
+   ```bash
+   node test-whatsapp.js
+   ```
+
+### Templates de mensagem:
+- **Criação:** "Olá {{nome}}! Recebemos seu pedido de {{serviços}} para {{modelo}}."
+- **Finalização:** "Olá {{nome}}! Seu pedido de {{serviços}} para {{modelo}} foi finalizado!"
+- **Andamento:** "Olá {{nome}}! Atualização: {{serviços}} para {{modelo}} está {{status}}."
+
+---
+
 ## Estrutura de Pastas
 ```
 ├── src
