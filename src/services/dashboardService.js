@@ -127,13 +127,8 @@ exports.getDashboardData = async (userId) => {
     
     // Definir permissões baseadas no role
     let permissions = [];
-    if (user && user.role === 'admin') {
-      permissions = ['view_all', 'create_orders', 'manage_clients', 'view_reports'];
-    } else if (user && user.role === 'funcionario') {
-      permissions = ['view_all', 'create_orders'];
-    } else {
-      permissions = ['view_all'];
-    }
+    // Todas as roles têm todas as permissões
+    permissions = ['view_all', 'create_orders', 'manage_clients', 'view_reports'];
 
     return {
       stats,

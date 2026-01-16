@@ -8,34 +8,8 @@ exports.listPedidosStatus = async (req, res) => {
     const { role, sub: userId } = req.user || {};
     let pedidos = await pedidoService.listPedidos();
     
-    // Filtrar pedidos baseado no cargo do usuário
-    switch (role?.toLowerCase()) {
-      case 'admin':
-        // Admin vê todos os pedidos
-        break;
-      case 'lavagem':
-        // Lavagem vê pedidos em "Lavagem - *" + pedidos vindos do atendimento
-        pedidos = pedidos.filter(p => 
-          p.status?.startsWith('Lavagem - ') || 
-          p.status === 'Atendimento - Aprovado'
-        );
-        break;
-      case 'pintura':
-        // Pintura vê pedidos em "Pintura - *" + pedidos vindos da lavagem
-        pedidos = pedidos.filter(p => 
-          p.status?.startsWith('Pintura - ') || 
-          p.status === 'Lavagem - Concluído'
-        );
-        break;
-      case 'atendimento':
-        // Atendimento vê todos os pedidos (para acompanhamento)
-        break;
-      default:
-        return res.status(403).json({ 
-          success: false, 
-          error: 'Acesso negado.' 
-        });
-    }
+    // Todas as roles veem todos os pedidos
+    // Filtragem removida para permitir acesso completo
 
     // Transformar pedidos para o formato esperado pelo frontend
     const pedidosFormatados = pedidos.map(pedido => ({
@@ -361,18 +335,8 @@ exports.patchPedido = async (req, res) => {
     // Validação de permissões para alteração de status
     if (updatesPermitidos.status) {
       const canUpdateStatus = (userRole, newStatus) => {
-        switch (userRole?.toLowerCase()) {
-          case 'admin':
-            return true; // Admin pode alterar qualquer status
-          case 'lavagem':
-            return newStatus.startsWith('Lavagem - ');
-          case 'pintura':
-            return newStatus.startsWith('Pintura - ');
-          case 'atendimento':
-            return newStatus.startsWith('Atendimento - ');
-          default:
-            return false;
-        }
+        // Todas as roles podem alterar qualquer status
+        return true;
       };
 
       if (!canUpdateStatus(role, updatesPermitidos.status)) {
@@ -491,18 +455,8 @@ exports.updatePedidoStatus = async (req, res) => {
 
     // Validar permissões baseado no cargo
     const canUpdateStatus = (userRole, newStatus) => {
-      switch (userRole?.toLowerCase()) {
-        case 'admin':
-          return true; // Admin pode alterar qualquer status
-        case 'lavagem':
-          return newStatus.startsWith('Lavagem - ');
-        case 'pintura':
-          return newStatus.startsWith('Pintura - ');
-        case 'atendimento':
-          return newStatus.startsWith('Atendimento - ');
-        default:
-          return false;
-      }
+      // Todas as roles podem alterar qualquer status
+      return true;
     };
 
     if (!canUpdateStatus(role, status)) {

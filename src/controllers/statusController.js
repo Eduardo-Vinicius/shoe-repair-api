@@ -13,19 +13,41 @@ const statusByRole = {
     "Atendimento - Entregue": []
   },
   lavagem: {
+    "Atendimento - Recebido": [],
+    "Atendimento - Orçado": [],
+    "Atendimento - Aprovado": [],
     "Lavagem - A Fazer": [],
     "Lavagem - Em Andamento": [],
-    "Lavagem - Concluído": []
-  },
-  pintura: {
+    "Lavagem - Concluído": [],
     "Pintura - A Fazer": [],
     "Pintura - Em Andamento": [],
-    "Pintura - Concluído": []
+    "Pintura - Concluído": [],
+    "Atendimento - Finalizado": [],
+    "Atendimento - Entregue": []
+  },
+  pintura: {
+    "Atendimento - Recebido": [],
+    "Atendimento - Orçado": [],
+    "Atendimento - Aprovado": [],
+    "Lavagem - A Fazer": [],
+    "Lavagem - Em Andamento": [],
+    "Lavagem - Concluído": [],
+    "Pintura - A Fazer": [],
+    "Pintura - Em Andamento": [],
+    "Pintura - Concluído": [],
+    "Atendimento - Finalizado": [],
+    "Atendimento - Entregue": []
   },
   atendimento: {
     "Atendimento - Recebido": [],
     "Atendimento - Orçado": [],
     "Atendimento - Aprovado": [],
+    "Lavagem - A Fazer": [],
+    "Lavagem - Em Andamento": [],
+    "Lavagem - Concluído": [],
+    "Pintura - A Fazer": [],
+    "Pintura - Em Andamento": [],
+    "Pintura - Concluído": [],
     "Atendimento - Finalizado": [],
     "Atendimento - Entregue": []
   }
@@ -68,14 +90,8 @@ exports.getStatusColumnsFiltered = async (req, res) => {
       });
     }
 
-    const columns = statusByRole[role.toLowerCase()];
-
-    if (!columns) {
-      return res.status(403).json({
-        success: false,
-        error: 'Role não autorizada.'
-      });
-    }
+    // Todas as roles veem todas as colunas
+    const columns = statusByRole.admin;
 
     res.status(200).json({
       success: true,
