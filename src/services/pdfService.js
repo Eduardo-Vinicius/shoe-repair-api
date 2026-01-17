@@ -213,7 +213,8 @@ class PdfService {
       
       console.log('Formatando informações do pedido...');
       const pedidoInfo = [
-        `No do Pedido: ${pedido.id || 'N/A'}`,
+        `Codigo do Pedido: ${pedido.codigo || pedido.id || 'N/A'}`,
+        `ID Interno: ${pedido.id}`,
         `Data de Criacao: ${this.formatDate(pedido.createdAt || pedido.dataCriacao)}`,
         `Data Prevista: ${this.formatDate(pedido.dataPrevistaEntrega)}`,
         `Status Atual: ${pedido.status || 'Nao informado'}`,

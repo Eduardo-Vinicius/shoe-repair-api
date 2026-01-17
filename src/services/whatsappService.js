@@ -1,4 +1,5 @@
 const axios = require('axios');
+const pdfService = require('./pdfService');
 
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN; // Token do Meta WhatsApp Cloud API
 const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID; // ID do número do WhatsApp Business
@@ -259,4 +260,231 @@ async function enviarStatusPedido(telefoneCliente, nomeCliente, status, descrica
   }
 }
 
-module.exports = { enviarStatusPedido, gerarTemplateStatusPedido };
+/**
+ * Formata os detalhes do pedido em uma mensagem legível para WhatsApp
+ * @param {object} pedido - Objeto do pedido completo
+ * @param {object} cliente - Objeto do cliente
+ * @returns {string} Mensagem formatada
+ */
+function formatarDetalhePedidoParaMensagem(pedido, cliente) {
+  const dataFormatada = new Date(pedido.dataCriacao).toLocaleDateString('pt-BR', {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
+  const servicosTexto = pedido.servicos && pedido.servicos.length > 0
+    ? pedido.servicos
+        .map(s => `• ${s.nome} - R$ ${Number(s.preco).toFixed(2).replace('.', ',')}`)
+        .join('\n')
+    : `• ${pedido.tipoServico || 'Serviço geral'} - R$ ${Number(pedido.precoTotal || pedido.preco).toFixed(2).replace('.', ',')}`;
+
+  const precoTotalFormatado = Number(pedido.precoTotal || pedido.preco).toFixed(2).replace('.', ',');
+  const valorSinalFormatado = Number(pedido.valorSinal || 0).toFixed(2).replace('.', ',');
+  const valorRestanteFormatado = Number(pedido.valorRestante || 0).toFixed(2).replace('.', ',');
+
+  const dataPrevistaFormatada = new Date(pedido.dataPrevistaEntrega).toLocaleDateString('pt-BR');
+
+  let mensagem = `*DETALHES DO PEDIDO* 📋\n\n`;
+  mensagem += `🔢 *Número do Pedido:* ${pedido.codigo}\n`;
+  mensagem += `📅 *Data do Pedido:* ${dataFormatada}\n`;
+  mensagem += `👟 *Modelo:* ${pedido.modeloTenis || 'Não especificado'}\n`;
+  mensagem += `🏪 *Status:* ${pedido.status}\n\n`;
+
+  mensagem += `*SERVIÇOS SOLICITADOS* 🔧\n`;
+  mensagem += `${servicosTexto}\n\n`;
+
+  mensagem += `*VALORES* 💰\n`;
+  mensagem += `Total: R$ ${precoTotalFormatado}\n`;
+  if (pedido.valorSinal && pedido.valorSinal > 0) {
+    mensagem += `Sinal Pago: R$ ${valorSinalFormatado}\n`;
+    mensagem += `Restante: R$ ${valorRestanteFormatado}\n`;
+  }
+  mensagem += `\n`;
+
+  mensagem += `📅 *Previsão de Entrega:* ${dataPrevistaFormatada}\n`;
+
+  if (pedido.observacoes) {
+    mensagem += `\n📝 *Observações:*\n${pedido.observacoes}\n`;
+  }
+
+  mensagem += `\n_Obrigado por confiar em nosso serviço! 😊_`;
+
+  return mensagem;
+}
+
+/**
+ * Envia um PDF do pedido para o cliente via WhatsApp
+ * @param {string} telefoneCliente - Telefone do cliente (5511999999999)
+ * @param {string} pedidoId - ID do pedido
+ * @param {object} pedido - Objeto do pedido (opcional, para não refazer query)
+ * @returns {object} Resultado do envio
+ */
+async function enviarPdfPedidoWhatsApp(telefoneCliente, pedidoId, pedido = null) {
+  try {
+    // Validação das configurações
+    if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
+      console.warn('[WhatsApp-PDF] API não configurada - variáveis de ambiente ausentes');
+      return {
+        success: false,
+        error: 'WhatsApp não configurado'
+      };
+    }
+
+    console.log('[WhatsApp-PDF] Iniciando envio de PDF do pedido', {
+      telefoneCliente,
+      pedidoId,
+      timestamp: new Date().toISOString()
+    });
+
+    // Gerar PDF do pedido
+    const { buffer, s3 } = await pdfService.generatePedidoPdf(pedidoId);
+
+    if (!s3 || !s3.url) {
+      console.warn('[WhatsApp-PDF] PDF não foi salvo no S3, usando buffer local');
+      // Continuar mesmo sem URL S3
+    }
+
+    const pdfUrl = s3?.url;
+
+    if (!pdfUrl) {
+      console.error('[WhatsApp-PDF] Não foi possível obter URL do PDF');
+      return {
+        success: false,
+        error: 'Falha ao gerar URL do PDF'
+      };
+    }
+
+    // Payload para envio do PDF
+    const payload = {
+      messaging_product: 'whatsapp',
+      to: telefoneCliente,
+      type: 'document',
+      document: {
+        link: pdfUrl,
+        filename: `pedido-${pedido?.codigo || pedidoId}.pdf`
+      }
+    };
+
+    const url = `https://graph.facebook.com/v19.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+    const headers = {
+      Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+      'Content-Type': 'application/json'
+    };
+
+    console.log('[WhatsApp-PDF] Enviando PDF para', telefoneCliente);
+    const response = await axios.post(url, payload, { headers });
+
+    console.log('[WhatsApp-PDF] ✅ PDF enviado com sucesso!', {
+      telefoneCliente,
+      pedidoId,
+      statusCode: response.status,
+      messageId: response.data?.messages?.[0]?.id
+    });
+
+    return {
+      success: true,
+      messageId: response.data?.messages?.[0]?.id,
+      pdfUrl: pdfUrl
+    };
+
+  } catch (error) {
+    console.error('[WhatsApp-PDF] ❌ Erro ao enviar PDF:', {
+      telefoneCliente,
+      pedidoId,
+      errorMessage: error.message,
+      statusCode: error.response?.status,
+      responseData: error.response?.data
+    });
+
+    return {
+      success: false,
+      error: error.response?.data?.error?.message || error.message
+    };
+  }
+}
+
+/**
+ * Envia uma mensagem formatada com detalhes do pedido para o cliente
+ * @param {string} telefoneCliente - Telefone do cliente (5511999999999)
+ * @param {object} pedido - Objeto do pedido completo
+ * @param {object} cliente - Objeto do cliente
+ * @returns {object} Resultado do envio
+ */
+async function enviarDetalhesPedidoWhatsApp(telefoneCliente, pedido, cliente) {
+  try {
+    // Validação das configurações
+    if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
+      console.warn('[WhatsApp-Detalhes] API não configurada - variáveis de ambiente ausentes');
+      return {
+        success: false,
+        error: 'WhatsApp não configurado'
+      };
+    }
+
+    console.log('[WhatsApp-Detalhes] Iniciando envio de detalhes do pedido', {
+      telefoneCliente,
+      codigoPedido: pedido.codigo,
+      timestamp: new Date().toISOString()
+    });
+
+    // Formatar mensagem
+    const mensagem = formatarDetalhePedidoParaMensagem(pedido, cliente);
+
+    // Payload para envio
+    const payload = {
+      messaging_product: 'whatsapp',
+      to: telefoneCliente,
+      type: 'text',
+      text: {
+        body: mensagem
+      }
+    };
+
+    const url = `https://graph.facebook.com/v19.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+    const headers = {
+      Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+      'Content-Type': 'application/json'
+    };
+
+    console.log('[WhatsApp-Detalhes] Enviando mensagem para', telefoneCliente);
+    const response = await axios.post(url, payload, { headers });
+
+    console.log('[WhatsApp-Detalhes] ✅ Detalhes enviados com sucesso!', {
+      telefoneCliente,
+      codigoPedido: pedido.codigo,
+      statusCode: response.status,
+      messageId: response.data?.messages?.[0]?.id
+    });
+
+    return {
+      success: true,
+      messageId: response.data?.messages?.[0]?.id
+    };
+
+  } catch (error) {
+    console.error('[WhatsApp-Detalhes] ❌ Erro ao enviar detalhes:', {
+      telefoneCliente,
+      codigoPedido: pedido.codigo,
+      errorMessage: error.message,
+      statusCode: error.response?.status,
+      responseData: error.response?.data
+    });
+
+    return {
+      success: false,
+      error: error.response?.data?.error?.message || error.message
+    };
+  }
+}
+
+module.exports = { 
+  enviarStatusPedido, 
+  gerarTemplateStatusPedido,
+  enviarPdfPedidoWhatsApp,
+  enviarDetalhesPedidoWhatsApp,
+  formatarDetalhePedidoParaMensagem
+};

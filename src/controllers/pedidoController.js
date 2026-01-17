@@ -1,6 +1,6 @@
 const pedidoService = require('../services/pedidoService');
 const clienteService = require('../services/clienteService');
-const { enviarStatusPedido } = require('../services/whatsappService');
+const whatsappService = require('../services/whatsappService');
 const pdfService = require('../services/pdfService');
 
 exports.listPedidosStatus = async (req, res) => {
@@ -702,6 +702,133 @@ exports.listPedidoPdfs = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erro interno do servidor ao listar PDFs',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Envia o PDF do pedido via WhatsApp
+ * POST /pedidos/:id/enviar-pdf-whatsapp
+ */
+exports.enviarPdfWhatsApp = async (req, res) => {
+  try {
+    const { telefoneCliente } = req.body;
+    const pedidoId = req.params.id;
+
+    if (!telefoneCliente) {
+      return res.status(400).json({
+        success: false,
+        error: 'telefoneCliente é obrigatório'
+      });
+    }
+
+    // Buscar pedido
+    const pedido = await pedidoService.getPedido(pedidoId);
+    if (!pedido) {
+      return res.status(404).json({
+        success: false,
+        error: 'Pedido não encontrado'
+      });
+    }
+
+    console.log('[PedidoController] Enviando PDF do pedido via WhatsApp', {
+      pedidoId,
+      codigo: pedido.codigo,
+      telefone: telefoneCliente
+    });
+
+    const resultado = await whatsappService.enviarPdfPedidoWhatsApp(
+      telefoneCliente,
+      pedidoId,
+      pedido
+    );
+
+    if (resultado.success) {
+      res.status(200).json({
+        success: true,
+        message: 'PDF enviado com sucesso via WhatsApp',
+        data: resultado
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: resultado.error || 'Erro ao enviar PDF'
+      });
+    }
+
+  } catch (error) {
+    console.error('Erro ao enviar PDF via WhatsApp:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Envia detalhes do pedido formatados via WhatsApp
+ * POST /pedidos/:id/enviar-detalhes-whatsapp
+ */
+exports.enviarDetalhesWhatsApp = async (req, res) => {
+  try {
+    const { telefoneCliente } = req.body;
+    const pedidoId = req.params.id;
+
+    if (!telefoneCliente) {
+      return res.status(400).json({
+        success: false,
+        error: 'telefoneCliente é obrigatório'
+      });
+    }
+
+    // Buscar pedido
+    const pedido = await pedidoService.getPedido(pedidoId);
+    if (!pedido) {
+      return res.status(404).json({
+        success: false,
+        error: 'Pedido não encontrado'
+      });
+    }
+
+    // Buscar cliente
+    const cliente = await clienteService.getCliente(pedido.clienteId);
+    if (!cliente) {
+      return res.status(404).json({
+        success: false,
+        error: 'Cliente não encontrado'
+      });
+    }
+
+    console.log('[PedidoController] Enviando detalhes do pedido via WhatsApp', {
+      pedidoId,
+      codigo: pedido.codigo,
+      telefone: telefoneCliente
+    });
+
+    const resultado = await whatsappService.enviarDetalhesPedidoWhatsApp(
+      telefoneCliente,
+      pedido,
+      cliente
+    );
+
+    if (resultado.success) {
+      res.status(200).json({
+        success: true,
+        message: 'Detalhes do pedido enviados com sucesso via WhatsApp',
+        data: resultado
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: resultado.error || 'Erro ao enviar detalhes'
+      });
+    }
+
+  } catch (error) {
+    console.error('Erro ao enviar detalhes via WhatsApp:', error);
+    res.status(500).json({
+      success: false,
       error: error.message
     });
   }

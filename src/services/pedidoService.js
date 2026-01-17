@@ -5,27 +5,30 @@ const tableName = process.env.DYNAMODB_PEDIDO_TABLE || 'shoeRepairPedidos';
 const dynamoDb = new AWS.DynamoDB.DocumentClient({ region: process.env.AWS_REGION });
 
 /**
- * Gera um código sequencial CURTO e LEGÍVEL para o pedido
- * Estratégia: Contador por hora com sharding para escalabilidade
- * Formato: YYYYMMDD-HH-XXX (ex: 20260115-14-001)
+ * Gera um código sequencial ULTRA-CURTO e LEGÍVEL para o pedido
+ * Estratégia: Contador por dia com sharding para escalabilidade
+ * Formato: DDMMYY-XXX (ex: 160126-001)
  *
  * Vantagens:
- * - Curto e legível (14 caracteres)
- * - Sequencial por hora (001, 002, 003...)
- * - Baixa contenção (sharding por hora)
- * - Fácil para uso diário
+ * - MUITO curto (9 caracteres) - fácil de digitar e lembrar
+ * - Sequencial diário (001, 002, 003...)
+ * - Baixa contenção (sharding por dia)
+ * - Perfeito para uso em balcão de loja
+ * - Escala bem: até 999 pedidos por dia
  */
 async function gerarCodigoPedido() {
   const now = new Date();
-  const dataKey = now.toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
-  const horaKey = now.getHours().toString().padStart(2, '0'); // HH (00-23)
+  // Formato: DDMMYY (ex: 160126)
+  const dia = now.getDate().toString().padStart(2, '0');
+  const mes = (now.getMonth() + 1).toString().padStart(2, '0');
+  const ano = now.getFullYear().toString().slice(-2);
+  const dataKey = `${dia}${mes}${ano}`;
 
-  // Sharding por hora: cada hora tem seu próprio contador
-  // Isso reduz drasticamente a contenção
-  const counterId = `pedido-${dataKey}-${horaKey}`;
+  // Sharding por dia: cada dia tem seu próprio contador
+  const counterId = `pedido-${dataKey}`;
 
   try {
-    // Tenta incrementar o contador atômico para hora atual
+    // Tenta incrementar o contador atômico para o dia atual
     const params = {
       TableName: 'ShoeRepairCounters',
       Key: { id: counterId },
@@ -42,13 +45,13 @@ async function gerarCodigoPedido() {
     const result = await dynamoDb.update(params).promise();
     const sequencial = result.Attributes.count;
 
-    // Formato legível: 20260115-14-001
-    const codigo = `${dataKey}-${horaKey}-${String(sequencial).padStart(3, '0')}`;
+    // Formato ultra-curto legível: 160126-001
+    const codigo = `${dataKey}-${String(sequencial).padStart(3, '0')}`;
 
-    console.log(`[PedidoService] Código curto gerado: ${codigo}`, {
+    console.log(`[PedidoService] Código gerado: ${codigo}`, {
       data: dataKey,
-      hora: horaKey,
-      sequencial: sequencial
+      sequencial: sequencial,
+      formato: 'DDMMYY-SEQ'
     });
 
     return codigo;
@@ -57,9 +60,10 @@ async function gerarCodigoPedido() {
     // Se a tabela não existe ou erro, fallback para timestamp curto
     console.warn('[PedidoService] Fallback para timestamp curto devido a erro:', error.message);
 
+    // Fallback simples: DDMMYY + últimos 3 dígitos do timestamp
     const timestamp = Date.now();
-    const shortCode = timestamp.toString().slice(-6); // Últimos 6 dígitos
-    const codigo = `${dataKey}-${shortCode}`;
+    const shortSeq = timestamp.toString().slice(-3);
+    const codigo = `${dataKey}-${shortSeq}`;
 
     console.log(`[PedidoService] Código fallback gerado: ${codigo}`);
     return codigo;

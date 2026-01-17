@@ -875,3 +875,46 @@ MAX_FILES_PER_UPLOAD=5
 **Versão da API**: 1.0.0  
 **Última Atualização**: Outubro 2024  
 **Contato**: Felipe Baz - felipe@exemplo.com
+
+---
+
+## 💸 WhatsApp: Estratégia e Otimização de Custos
+
+### Visão Rápida
+- **Custo por conversa**: O WhatsApp Cloud API cobra por conversas de 24h (não por mensagem). Combine mensagens no mesmo período para pagar apenas uma conversa.
+- **Categorias**: Conversas iniciadas pelo cliente (service) tendem a ser mais baratas que as iniciadas pela empresa (utility/marketing). Sempre que possível, responda dentro da janela de 24h.
+- **Padrão recomendado**: Use mensagem formatada por padrão e envie PDF apenas em eventos-chave ou sob demanda.
+
+### Fluxos Recomendados de Mensagens
+- **Criação do pedido (1 conversa)**: Envie uma mensagem formatada com código curto do pedido, serviços e previsão de entrega. Evite PDF aqui a menos que o cliente solicite.
+- **Mudança de status importante (mesma conversa se possível)**:
+  - "Aprovado" ou "Entrou em produção" → mensagem curta de atualização.
+  - "Pronto para retirada/entrega" → mensagem + link de pagamento/agenda.
+- **Lembrete de entrega (D-1)**: Se estiver fora da janela, considere agrupar com a mensagem de conclusão para não abrir mais de uma conversa.
+- **Finalização/Nota (opcional)**: Enviar PDF somente quando concluir o serviço ou se solicitado pelo cliente.
+- **Suporte/garantia**: Oriente o cliente a iniciar contato, para que suas respostas fiquem dentro de uma conversa de serviço (menor custo).
+
+### Boas Práticas para Reduzir Custo
+- **Uma conversa, várias mensagens**: Agrupe atualização + detalhes + link de pagamento no mesmo período de 24h.
+- **Mensagem primeiro, PDF depois**: Use texto com resumo dos serviços; envie PDF apenas quando necessário.
+- **Links curtos e reutilizáveis**: Prefira enviar links (S3 pré-assinado) ao invés de anexar repetidamente; reduz transferências.
+- **Opt-in e resposta do cliente**: Incentive o cliente a iniciar a conversa; suas respostas entram na categoria de serviço.
+- **Política de ciclo de vida no S3**: Expire PDFs antigos (ex.: 90 dias) para manter storage baixo.
+- **Counter diário já implementado**: O código `DDMMYY-XXX` reduz contenção e custo no DynamoDB.
+
+### Rotas Úteis (já disponíveis)
+- [Enviar detalhes via WhatsApp](../src/routes/pedidoRoutes.js#L18): `POST /pedidos/:id/enviar-detalhes-whatsapp`
+- [Enviar PDF via WhatsApp](../src/routes/pedidoRoutes.js#L19): `POST /pedidos/:id/enviar-pdf-whatsapp`
+
+### Configuração Sugerida
+- **Env vars** (ver seção de Configurações Avançadas): `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`.
+- **Preferência de envio**: Mensagem formatada padrão; PDF apenas em `Finalizado` ou sob demanda.
+- **Templates Meta (opcional)**: Cadastre templates para notificações consistentes e melhor entregabilidade.
+
+### Alternativas Mais Baratas (quando fizer sentido)
+- **Email (SES/SMTP)**: Quase zero custo; bom para notas fiscais e comprovantes.
+- **Telegram Bot**: Gratuito; útil para clientes que optarem por esse canal.
+- **SMS**: Amplo alcance, custo por mensagem; avalie provedores locais.
+- **Push (PWA)**: Gratuito, mas depende de consentimento e uso de web app.
+
+> Dica: Defina uma política de comunicação por status no seu frontend (ex.: toggles) para decidir automaticamente quando enviar texto vs PDF, mantendo conversas dentro da mesma janela.

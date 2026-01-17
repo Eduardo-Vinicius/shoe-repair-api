@@ -19,5 +19,8 @@ router.patch('/:id/status', pedidoController.updatePedidoStatus);
 router.post('/document/pdf', pedidoController.generatePedidoPdf);
 // Nova rota para listar PDFs salvos de um pedido
 router.get('/:id/pdfs', pedidoController.listPedidoPdfs);
+// Novas rotas para WhatsApp
+router.post('/:id/enviar-pdf-whatsapp', pedidoController.enviarPdfWhatsApp);
+router.post('/:id/enviar-detalhes-whatsapp', pedidoController.enviarDetalhesWhatsApp);
 
 module.exports = router;
