@@ -165,7 +165,7 @@ Resources:
       BillingMode: PAY_PER_REQUEST
   # API Gateway HTTP API (v2) - Melhor suporte a CORS
 
-  ShoeRepairHttpApi:
+  ShoeRepairHttpApiNew:
     Type: AWS::ApiGatewayV2::Api
     Properties:
       Name: ShoeRepairHttpApiNew
@@ -188,30 +188,30 @@ Resources:
         AllowCredentials: false
 
   # Integração Lambda com HTTP API
-  ShoeRepairHttpApiIntegration:
+  ShoeRepairHttpApiNewIntegration:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
-      ApiId: !Ref ShoeRepairHttpApi
+      ApiId: !Ref ShoeRepairHttpApiNew
       IntegrationType: AWS_PROXY
       IntegrationUri: !GetAtt ShoeRepairApiFunction.Arn
       PayloadFormatVersion: '2.0'
 
   # Rota padrão (captura todas as requisições)
-  ShoeRepairHttpApiRoute:
+  ShoeRepairHttpApiNewRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
-      ApiId: !Ref ShoeRepairHttpApi
+      ApiId: !Ref ShoeRepairHttpApiNew
       RouteKey: '$default'
       Target: !Join
         - /
         - - integrations
-          - !Ref ShoeRepairHttpApiIntegration
+          - !Ref ShoeRepairHttpApiNewIntegration
 
   # Stage de produção
-  ShoeRepairHttpApiStage:
+  ShoeRepairHttpApiNewStage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
-      ApiId: !Ref ShoeRepairHttpApi
+      ApiId: !Ref ShoeRepairHttpApiNew
       StageName: $default
       AutoDeploy: true
 
@@ -222,11 +222,11 @@ Resources:
       FunctionName: !GetAtt ShoeRepairApiFunction.Arn
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ShoeRepairHttpApi}/*'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ShoeRepairHttpApiNew}/*'
 
 Outputs:
   ApiUrl:
     Description: "URL da API HTTP Gateway"
-    Value: !GetAtt ShoeRepairHttpApi.ApiEndpoint
+    Value: !GetAtt ShoeRepairHttpApiNew.ApiEndpoint
     Export:
       Name: ShoeRepairApiUrl
