@@ -185,7 +185,6 @@ Resources:
         ExposeHeaders:
           - '*'
         MaxAge: 3600
-        AllowCredentials: false
 
   # Integração Lambda com HTTP API
   ShoeRepairHttpApiNewIntegration:

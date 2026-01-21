@@ -14,28 +14,12 @@ const setorRoutes = require('./src/routes/setorRoutes');
 
 const app = express();
 
-// Configuração robusta de CORS
-app.use(cors({
-  origin: true, // Aceita qualquer origem
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
-  exposedHeaders: ['Content-Length', 'Content-Type'],
-  maxAge: 86400 // 24 horas
-}));
-
-// Middleware adicional para garantir headers CORS em todas as respostas
+// CORS gerenciado pelo API Gateway HTTP API v2
+// Apenas garantindo que headers estejam presentes caso necessário
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  
-  // Responder imediatamente para OPTIONS (preflight)
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  
   next();
 });
 
