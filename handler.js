@@ -1,6 +1,5 @@
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
 const serverless = require('serverless-http');
 
 
@@ -14,12 +13,19 @@ const setorRoutes = require('./src/routes/setorRoutes');
 
 const app = express();
 
-// CORS gerenciado pelo API Gateway HTTP API v2
-// Apenas garantindo que headers estejam presentes caso necessário
+// IMPORTANTE: CORS deve ser gerenciado ANTES de qualquer outra coisa
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.header('Access-Control-Max-Age', '86400');
+  res.status(200).send();
+});
+
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
   next();
 });
 
@@ -61,50 +67,5 @@ app.use((req, res, next) => {
 // Exporta o app para uso local
 module.exports = app;
 
-// Exporta o handler para AWS Lambda com configuração HTTP API v2
-const serverlessHandler = serverless(app, {
-  request: (request, event, context) => {
-    // Garante que o contexto do evento seja preservado
-    request.event = event;
-    request.context = context;
-  }
-});
-
-module.exports.handler = async (event, context) => {
-  console.log('[Lambda] Função iniciada');
-  console.log('[Lambda] Event:', JSON.stringify(event, null, 2));
-  console.log('[Lambda] Context:', JSON.stringify(context, null, 2));
-  
-  // Tratamento especial para requisições OPTIONS (preflight CORS)
-  if (event.requestContext && event.requestContext.http && event.requestContext.http.method === 'OPTIONS') {
-    console.log('[Lambda] OPTIONS request detectado - retornando headers CORS');
-    return {
-      statusCode: 200,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept',
-        'Access-Control-Max-Age': '86400'
-      },
-      body: ''
-    };
-  }
-  
-  try {
-    const result = await serverlessHandler(event, context);
-    console.log('[Lambda] Resposta gerada:', JSON.stringify(result, null, 2));
-    
-    // Adiciona headers CORS à resposta se não existirem
-    if (result && result.headers) {
-      result.headers['Access-Control-Allow-Origin'] = result.headers['Access-Control-Allow-Origin'] || '*';
-      result.headers['Access-Control-Allow-Methods'] = result.headers['Access-Control-Allow-Methods'] || 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
-      result.headers['Access-Control-Allow-Headers'] = result.headers['Access-Control-Allow-Headers'] || 'Content-Type, Authorization, X-Requested-With, Accept';
-    }
-    
-    return result;
-  } catch (error) {
-    console.error('[Lambda] Erro na execução:', error);
-    console.error('[Lambda] Stack trace:', error.stack);
-    throw error;
-  }
-};
+// Exporta o handler para AWS Lambda
+module.exports.handler = serverless(app);
