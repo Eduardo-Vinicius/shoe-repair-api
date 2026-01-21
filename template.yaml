@@ -164,10 +164,11 @@ Resources:
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
   # API Gateway HTTP API (v2) - Melhor suporte a CORS
+
   ShoeRepairHttpApi:
     Type: AWS::ApiGatewayV2::Api
     Properties:
-      Name: ShoeRepairHttpApi
+      Name: ShoeRepairHttpApiNew
       ProtocolType: HTTP
       CorsConfiguration:
         AllowOrigins:
