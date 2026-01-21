@@ -1,7 +1,8 @@
 const pedidoService = require('../services/pedidoService');
 const clienteService = require('../services/clienteService');
-const whatsappService = require('../services/whatsappService');
+const emailService = require('../services/emailService');
 const pdfService = require('../services/pdfService');
+const setorService = require('../services/setorService');
 
 exports.listPedidosStatus = async (req, res) => {
   try {
@@ -132,7 +133,20 @@ exports.createPedido = async (req, res) => {
       });
     }
 
-    const { role, sub: userId, email: userEmail } = req.user || {};
+    const { role, sub: userId, email: userEmail, name: userName } = req.user || {};
+
+    // Validar quantidade de fotos (máximo 8)
+    if (fotos && fotos.length > 8) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Máximo de 8 fotos permitidas' 
+      });
+    }
+
+    // Determinar setores baseado nos serviços
+    const setoresFluxo = setorService.determinarSetoresPorServicos(servicos);
+    const setorInicial = setoresFluxo[0]; // 'atendimento-inicial'
+    const setorInicialObj = setorService.getSetor(setorInicial);
 
     // Estruturar dados do pedido
     const dadosPedido = {
@@ -145,58 +159,81 @@ exports.createPedido = async (req, res) => {
       valorSinal: valorSinal || 0,
       valorRestante: valorRestante || (precoTotal - (valorSinal || 0)),
       dataPrevistaEntrega,
-      departamento: departamento || 'Atendimento',
+      departamento: setorInicialObj.nome,
       observacoes: observacoes || '',
       garantia: garantia || {
         ativa: false,
-        preco: 0,
         duracao: '',
         data: ''
       },
       acessorios: acessorios || [],
-      status: status || 'Atendimento - Aguardando Aprovação',
+      status: `${setorInicialObj.nome} - Em Andamento`,
       dataCriacao: new Date().toISOString(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      // Campo createdBy - quem criou o pedido
+      createdBy: {
+        userId: userId || 'sistema',
+        userName: userName || userEmail || 'Sistema',
+        userEmail: userEmail || 'sistema@app.com',
+        userRole: role || 'sistema'
+      },
+      // Sistema de setores
+      setoresFluxo: setoresFluxo,
+      setorAtual: setorInicial,
+      setoresHistorico: [
+        {
+          setorId: setorInicial,
+          setorNome: setorInicialObj.nome,
+          entradaEm: new Date().toISOString(),
+          saidaEm: null,
+          usuarioEntrada: userEmail || 'Sistema',
+          usuarioEntradaNome: userName || userEmail || 'Sistema',
+          usuarioSaida: null,
+          usuarioSaidaNome: null,
+          observacoes: 'Pedido criado'
+        }
+      ],
       statusHistory: [
         {
-          status: status || 'Atendimento - Aguardando Aprovação',
+          status: `${setorInicialObj.nome} - Em Andamento`,
           date: new Date().toISOString().split('T')[0],
           time: new Date().toTimeString().split(' ')[0].substring(0, 5),
           userId: userId || 'sistema',
-          userName: userEmail || 'Sistema'
+          userName: userName || userEmail || 'Sistema'
         }
       ]
     };
 
     const novoPedido = await pedidoService.createPedido(dadosPedido);
     
-    // Enviar notificação WhatsApp para o cliente sobre a criação do pedido
+    // Enviar notificação por email para o cliente sobre a criação do pedido
     try {
-      console.log('[PedidoController] Enviando notificação WhatsApp para criação do pedido...');
+      console.log('[PedidoController] Enviando notificação por email para criação do pedido...');
       
       // Buscar dados do cliente
       const cliente = await clienteService.getCliente(clienteId);
-      if (cliente && cliente.telefone && cliente.nome) {
+      if (cliente && cliente.email && cliente.nome) {
         const descricaoServicos = servicos.map(s => s.nome).join(', ');
-        await enviarStatusPedido(
-          cliente.telefone,
+        await emailService.enviarStatusPedido(
+          cliente.email,
           cliente.nome,
           'criado',
           descricaoServicos,
-          modeloTenis
+          modeloTenis,
+          novoPedido.codigo
         );
-        console.log('[PedidoController] Notificação WhatsApp de criação enviada com sucesso');
+        console.log('[PedidoController] Notificação por email de criação enviada com sucesso');
       } else {
-        console.log('[PedidoController] Dados do cliente insuficientes para envio WhatsApp:', {
+        console.log('[PedidoController] Dados do cliente insuficientes para envio de email:', {
           clienteEncontrado: !!cliente,
-          telefone: cliente ? !!cliente.telefone : false,
+          email: cliente ? !!cliente.email : false,
           nome: cliente ? !!cliente.nome : false
         });
       }
-    } catch (whatsappError) {
-      console.error('[PedidoController] Erro ao enviar WhatsApp de criação:', whatsappError);
-      // Não falhar a operação por erro no WhatsApp
+    } catch (emailError) {
+      console.error('[PedidoController] Erro ao enviar email de criação:', emailError);
+      // Não falhar a operação por erro no email
     }
     
     res.status(201).json({
@@ -383,32 +420,33 @@ exports.patchPedido = async (req, res) => {
       camposAtualizados: Object.keys(updatesPermitidos)
     });
 
-    // Se o status foi alterado, enviar notificação via WhatsApp
+    // Se o status foi alterado, enviar notificação por email
     if (updatesPermitidos.status && updatesPermitidos.status !== pedidoAtual.status) {
       try {
-        console.log('[PedidoController] Enviando notificação WhatsApp para mudança de status...');
+        console.log('[PedidoController] Enviando notificação por email para mudança de status...');
         
         // Buscar dados do cliente
         const cliente = await clienteService.getCliente(pedidoAtualizado.clienteId);
-        if (cliente && cliente.telefone && cliente.nome) {
-          await enviarStatusPedido(
-            cliente.telefone,
+        if (cliente && cliente.email && cliente.nome) {
+          await emailService.enviarStatusPedido(
+            cliente.email,
             cliente.nome,
             updatesPermitidos.status,
             pedidoAtualizado.descricaoServicos || pedidoAtualizado.servicos?.map(s => s.nome).join(', ') || 'Serviços diversos',
-            pedidoAtualizado.modeloTenis || 'Tênis'
+            pedidoAtualizado.modeloTenis || 'Tênis',
+            pedidoAtualizado.codigo
           );
-          console.log('[PedidoController] Notificação WhatsApp enviada com sucesso');
+          console.log('[PedidoController] Notificação por email enviada com sucesso');
         } else {
-          console.log('[PedidoController] Dados do cliente insuficientes para envio WhatsApp:', {
+          console.log('[PedidoController] Dados do cliente insuficientes para envio de email:', {
             clienteEncontrado: !!cliente,
-            telefone: cliente ? !!cliente.telefone : false,
+            email: cliente ? !!cliente.email : false,
             nome: cliente ? !!cliente.nome : false
           });
         }
-      } catch (whatsappError) {
-        console.error('[PedidoController] Erro ao enviar WhatsApp:', whatsappError);
-        // Não falhar a operação por erro no WhatsApp
+      } catch (emailError) {
+        console.error('[PedidoController] Erro ao enviar email:', emailError);
+        // Não falhar a operação por erro no email
       }
     }
 
@@ -504,27 +542,28 @@ exports.updatePedidoStatus = async (req, res) => {
       });
     }
 
-    // Enviar notificação via WhatsApp se os dados necessários estiverem disponíveis
+    // Enviar notificação por email se os dados necessários estiverem disponíveis
     try {
       const cliente = await clienteService.getCliente(atualizado.clienteId);
-      if (cliente && cliente.telefone && cliente.nome) {
-        await enviarStatusPedido(
-          cliente.telefone,
+      if (cliente && cliente.email && cliente.nome) {
+        await emailService.enviarStatusPedido(
+          cliente.email,
           cliente.nome,
           status,
           atualizado.descricaoServicos || atualizado.servicos?.map(s => s.nome).join(', ') || 'Serviços diversos',
-          atualizado.modeloTenis || 'Tênis'
+          atualizado.modeloTenis || 'Tênis',
+          atualizado.codigo
         );
       } else {
-        console.log('[PedidoController] Dados do cliente insuficientes para envio WhatsApp:', {
+        console.log('[PedidoController] Dados do cliente insuficientes para envio de email:', {
           clienteEncontrado: !!cliente,
-          telefone: cliente ? !!cliente.telefone : false,
+          email: cliente ? !!cliente.email : false,
           nome: cliente ? !!cliente.nome : false
         });
       }
-    } catch (whatsappError) {
-      console.error('[PedidoController] Erro ao enviar WhatsApp:', whatsappError);
-      // Não falha a requisição se o WhatsApp der erro
+    } catch (emailError) {
+      console.error('[PedidoController] Erro ao enviar email:', emailError);
+      // Não falha a requisição se o email der erro
     }
 
     res.status(200).json({
@@ -798,6 +837,169 @@ exports.enviarDetalhesWhatsApp = async (req, res) => {
         success: false,
         error: 'Cliente não encontrado'
       });
+    }
+
+    console.log('[PedidoController] Enviando detalhes do pedido via WhatsApp', {
+      pedidoId,
+      codigo: pedido.codigo,
+      telefone: telefoneCliente
+    });
+
+    const resultado = await whatsappService.enviarDetalhesPedidoWhatsApp(
+      telefoneCliente,
+      pedido,
+      cliente
+    );
+
+    if (resultado.success) {
+      res.status(200).json({
+        success: true,
+        message: 'Detalhes do pedido enviados com sucesso via WhatsApp',
+        data: resultado
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: resultado.error || 'Erro ao enviar detalhes'
+      });
+    }
+
+  } catch (error) {
+    console.error('Erro ao enviar detalhes via WhatsApp:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+// ==========================================
+// ENDPOINTS DE SETORES
+// ==========================================
+
+/**
+ * Lista todos os setores disponíveis
+ * GET /setores
+ */
+exports.listarSetores = async (req, res) => {
+  try {
+    const setores = setorService.listarSetores();
+    res.status(200).json({
+      success: true,
+      data: setores
+    });
+  } catch (error) {
+    console.error('[PedidoController] Erro ao listar setores:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Move um pedido para um setor específico
+ * POST /pedidos/:id/mover-setor
+ * Body: { setorId: string }
+ */
+exports.moverParaSetor = async (req, res) => {
+  try {
+    const pedidoId = req.params.id;
+    const { setorId } = req.body;
+    const usuario = {
+      sub: req.user?.sub,
+      email: req.user?.email,
+      name: req.user?.name || req.user?.email,
+      role: req.user?.role
+    };
+
+    if (!setorId) {
+      return res.status(400).json({
+        success: false,
+        error: 'setorId é obrigatório'
+      });
+    }
+
+    console.log('[PedidoController] Movendo pedido para setor:', {
+      pedidoId,
+      setorId,
+      usuario: usuario.email
+    });
+
+    const pedidoAtualizado = await setorService.moverPedidoParaSetor(
+      pedidoId,
+      setorId,
+      usuario
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Pedido movido para o setor com sucesso',
+      data: pedidoAtualizado
+    });
+
+  } catch (error) {
+    console.error('[PedidoController] Erro ao mover pedido:', error);
+    res.status(400).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Retorna o próximo setor no fluxo do pedido
+ * GET /pedidos/:id/proximo-setor
+ */
+exports.getProximoSetor = async (req, res) => {
+  try {
+    const pedidoId = req.params.id;
+    const pedido = await pedidoService.getPedido(pedidoId);
+
+    if (!pedido) {
+      return res.status(404).json({
+        success: false,
+        error: 'Pedido não encontrado'
+      });
+    }
+
+    const proximoSetor = setorService.getProximoSetor(pedido);
+
+    res.status(200).json({
+      success: true,
+      data: proximoSetor
+    });
+
+  } catch (error) {
+    console.error('[PedidoController] Erro ao buscar próximo setor:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Retorna estatísticas de todos os setores
+ * GET /setores/estatisticas
+ */
+exports.getEstatisticasSetores = async (req, res) => {
+  try {
+    const estatisticas = await setorService.getEstatisticasSetores();
+
+    res.status(200).json({
+      success: true,
+      data: estatisticas
+    });
+
+  } catch (error) {
+    console.error('[PedidoController] Erro ao buscar estatísticas:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
     }
 
     console.log('[PedidoController] Enviando detalhes do pedido via WhatsApp', {
