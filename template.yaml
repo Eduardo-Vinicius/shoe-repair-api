@@ -199,7 +199,7 @@ Resources:
   ShoeRepairHttpApiNewRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
-      ApiId: !Ref ShoeRepairHttpApiNew
+      ApiId: !Ref ShoeRepairHttpApiNew2
       RouteKey: '$default'
       Target: !Join
         - /
