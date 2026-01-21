@@ -40,6 +40,27 @@ module.exports = {
     userId: String,
     userName: String
   }],
+  // Campos do criador do pedido
+  createdBy: { // Informações de quem criou o pedido
+    userId: String,
+    userName: String,
+    userEmail: String,
+    userRole: String
+  },
+  // Campos do sistema de setores
+  setoresFluxo: [String], // Array de IDs de setores que o pedido vai passar (ex: ['atendimento-inicial', 'lavagem', 'acabamento', 'atendimento-final'])
+  setorAtual: String, // ID do setor atual onde o pedido está
+  setoresHistorico: [{ // Histórico de passagem pelos setores
+    setorId: String,
+    setorNome: String,
+    entradaEm: String, // ISO date - quando entrou no setor
+    saidaEm: String, // ISO date - quando saiu do setor (null se ainda está)
+    usuarioEntrada: String, // Email do usuário que moveu para este setor
+    usuarioEntradaNome: String, // Nome do usuário
+    usuarioSaida: String, // Email do usuário que moveu para o próximo setor
+    usuarioSaidaNome: String, // Nome do usuário
+    observacoes: String
+  }],
   // Campos antigos mantidos para compatibilidade
   tipoServico: String, // Enum (deprecated)
   descricaoServicos: String, // (deprecated)
