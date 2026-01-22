@@ -27,6 +27,7 @@ module.exports = {
     data: String
   },
   acessorios: [String], // Lista de acessórios
+  prioridade: Number, // 1 = Alta (I), 2 = Média (II), 3 = Baixa (III), padrão = 2
   status: String, // Enum
   dataCriacao: String, // ISO date
   createdAt: String, // ISO date
@@ -57,8 +58,10 @@ module.exports = {
     saidaEm: String, // ISO date - quando saiu do setor (null se ainda está)
     usuarioEntrada: String, // Email do usuário que moveu para este setor
     usuarioEntradaNome: String, // Nome do usuário
+    funcionarioEntrada: String, // Nome do funcionário que moveu (informado manualmente)
     usuarioSaida: String, // Email do usuário que moveu para o próximo setor
     usuarioSaidaNome: String, // Nome do usuário
+    funcionarioSaida: String, // Nome do funcionário que moveu para o próximo setor
     observacoes: String
   }],
   // Campos antigos mantidos para compatibilidade

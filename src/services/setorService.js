@@ -85,13 +85,16 @@ function determinarSetoresPorServicos(servicos) {
  * @param {String} pedidoId - ID do pedido
  * @param {String} novoSetorId - ID do setor de destino
  * @param {Object} usuario - Dados do usuário que está movendo
+ * @param {String} funcionarioNome - Nome do funcionário que está movendo (opcional)
+ * @param {String} observacao - Observação sobre a movimentação (opcional)
  * @returns {Object} Pedido atualizado
  */
-async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario) {
+async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioNome = null, observacao = '') {
   console.log('[SetorService] Movendo pedido para setor:', {
     pedidoId,
     novoSetorId,
-    usuario: usuario.email
+    usuario: usuario.email,
+    funcionarioNome
   });
   
   // Validar setor existe
@@ -123,11 +126,13 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario) {
     if (historicoAberto) {
       historicoAberto.saidaEm = agora;
       historicoAberto.usuarioSaida = usuario.email;
-      historicoAberto.usuarioSaidaNome = usuario.name || usuario.email;
+      historicoAberto.usuarioSaidaNome = funcionarioNome || usuario.name || usuario.email;
+      historicoAberto.funcionarioSaida = funcionarioNome || '';
       
       console.log('[SetorService] Fechando setor anterior:', {
         setor: historicoAberto.setorNome,
-        tempoNoSetor: calcularTempoNoSetor(historicoAberto)
+        tempoNoSetor: calcularTempoNoSetor(historicoAberto),
+        funcionario: funcionarioNome
       });
     }
   }
@@ -140,9 +145,11 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario) {
     saidaEm: null,
     usuarioEntrada: usuario.email,
     usuarioEntradaNome: usuario.name || usuario.email,
+    funcionarioEntrada: funcionarioNome || '',
     usuarioSaida: null,
     usuarioSaidaNome: null,
-    observacoes: ''
+    funcionarioSaida: '',
+    observacoes: observacao || ''
   });
   
   console.log('[SetorService] Abrindo novo setor:', setor.nome);

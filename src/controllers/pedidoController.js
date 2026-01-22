@@ -53,8 +53,19 @@ exports.listPedidosStatus = async (req, res) => {
         duracao: '',
         data: ''
       },
-      acessorios: pedido.acessorios || []
+      acessorios: pedido.acessorios || [],
+      prioridade: pedido.prioridade || 2
     }));
+
+    // Ordenar por prioridade (1=alta primeiro) e depois por data (mais recentes primeiro)
+    pedidosFormatados.sort((a, b) => {
+      // Primeiro por prioridade (menor número = maior prioridade)
+      if (a.prioridade !== b.prioridade) {
+        return a.prioridade - b.prioridade;
+      }
+      // Se mesma prioridade, ordenar por data (mais recente primeiro)
+      return new Date(b.dataCriacao) - new Date(a.dataCriacao);
+    });
 
     res.status(200).json({
       success: true,
@@ -104,7 +115,8 @@ exports.createPedido = async (req, res) => {
       observacoes,
       garantia,
       acessorios,
-      status
+      status,
+      prioridade
     } = req.body;
 
     // Validação básica
@@ -143,6 +155,18 @@ exports.createPedido = async (req, res) => {
       });
     }
 
+    // Processar prioridade (aceita 1-3 ou 'I', 'II', 'III')
+    let prioridadeNumerica = 2; // Padrão: média
+    if (prioridade) {
+      if (prioridade === 'I' || prioridade === 1 || prioridade === '1') {
+        prioridadeNumerica = 1; // Alta
+      } else if (prioridade === 'II' || prioridade === 2 || prioridade === '2') {
+        prioridadeNumerica = 2; // Média
+      } else if (prioridade === 'III' || prioridade === 3 || prioridade === '3') {
+        prioridadeNumerica = 3; // Baixa
+      }
+    }
+
     // Status inicial padrão
     const statusInicial = status || 'Atendimento - Recebido';
 
@@ -165,6 +189,7 @@ exports.createPedido = async (req, res) => {
         data: ''
       },
       acessorios: acessorios || [],
+      prioridade: prioridadeNumerica,
       status: statusInicial,
       dataCriacao: new Date().toISOString(),
       createdAt: new Date().toISOString(),
@@ -891,7 +916,7 @@ exports.listarSetores = async (req, res) => {
 exports.moverParaSetor = async (req, res) => {
   try {
     const pedidoId = req.params.id;
-    const { setorId } = req.body;
+    const { setorId, funcionarioNome, observacao } = req.body;
     const usuario = {
       sub: req.user?.sub,
       email: req.user?.email,
@@ -909,13 +934,16 @@ exports.moverParaSetor = async (req, res) => {
     console.log('[PedidoController] Movendo pedido para setor:', {
       pedidoId,
       setorId,
-      usuario: usuario.email
+      usuario: usuario.email,
+      funcionarioNome
     });
 
     const pedidoAtualizado = await setorService.moverPedidoParaSetor(
       pedidoId,
       setorId,
-      usuario
+      usuario,
+      funcionarioNome,
+      observacao
     );
 
     res.status(200).json({
