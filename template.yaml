@@ -165,10 +165,10 @@ Resources:
       BillingMode: PAY_PER_REQUEST
   # API Gateway HTTP API (v2) - Melhor suporte a CORS
 
-  ShoeRepairHttpApiNewGtw:
+  ShoeRepairHttpApi:
     Type: AWS::ApiGatewayV2::Api
     Properties:
-      Name: ShoeRepairHttpApiNewGtw
+      Name: ShoeRepairHttpApi
       ProtocolType: HTTP
       CorsConfiguration:
         AllowOrigins:
@@ -187,30 +187,30 @@ Resources:
         MaxAge: 3600
 
   # Integração Lambda com HTTP API
-  ShoeRepairHttpApiNewGtwIntegration:
+  ShoeRepairHttpApiIntegration:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
-      ApiId: !Ref ShoeRepairHttpApiNewGtw
+      ApiId: !Ref ShoeRepairHttpApi
       IntegrationType: AWS_PROXY
       IntegrationUri: !GetAtt ShoeRepairApiFunction.Arn
       PayloadFormatVersion: '2.0'
 
   # Rota padrão (captura todas as requisições)
-  ShoeRepairHttpApiNewGtwRoute:
+  ShoeRepairHttpApiRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
-      ApiId: !Ref ShoeRepairHttpApiNewGtw
+      ApiId: !Ref ShoeRepairHttpApi
       RouteKey: '$default'
       Target: !Join
         - /
         - - integrations
-          - !Ref ShoeRepairHttpApiNewGtwIntegration
+          - !Ref ShoeRepairHttpApiIntegration
 
   # Stage de produção
-  ShoeRepairHttpApiNewGtwStage:
+  ShoeRepairHttpApiStage:
     Type: AWS::ApiGatewayV2::Stage
     Properties:
-      ApiId: !Ref ShoeRepairHttpApiNewGtw
+      ApiId: !Ref ShoeRepairHttpApi
       StageName: $default
       AutoDeploy: true
 
@@ -221,11 +221,11 @@ Resources:
       FunctionName: !GetAtt ShoeRepairApiFunction.Arn
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ShoeRepairHttpApiNewGtw}/*'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ShoeRepairHttpApi}/*'
 
 Outputs:
   ApiUrl:
     Description: "URL da API HTTP Gateway"
-    Value: !GetAtt ShoeRepairHttpApiNewGtw.ApiEndpoint
+    Value: !GetAtt ShoeRepairHttpApi.ApiEndpoint
     Export:
       Name: ShoeRepairApiUrl
