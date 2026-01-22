@@ -143,10 +143,8 @@ exports.createPedido = async (req, res) => {
       });
     }
 
-    // Determinar setores baseado nos serviços
-    const setoresFluxo = setorService.determinarSetoresPorServicos(servicos);
-    const setorInicial = setoresFluxo[0]; // 'atendimento-inicial'
-    const setorInicialObj = setorService.getSetor(setorInicial);
+    // Status inicial padrão
+    const statusInicial = status || 'Atendimento - Recebido';
 
     // Estruturar dados do pedido
     const dadosPedido = {
@@ -159,7 +157,7 @@ exports.createPedido = async (req, res) => {
       valorSinal: valorSinal || 0,
       valorRestante: valorRestante || (precoTotal - (valorSinal || 0)),
       dataPrevistaEntrega,
-      departamento: setorInicialObj.nome,
+      departamento: departamento || '',
       observacoes: observacoes || '',
       garantia: garantia || {
         ativa: false,
@@ -167,7 +165,7 @@ exports.createPedido = async (req, res) => {
         data: ''
       },
       acessorios: acessorios || [],
-      status: `${setorInicialObj.nome} - Em Andamento`,
+      status: statusInicial,
       dataCriacao: new Date().toISOString(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -178,25 +176,13 @@ exports.createPedido = async (req, res) => {
         userEmail: userEmail || 'sistema@app.com',
         userRole: role || 'sistema'
       },
-      // Sistema de setores
-      setoresFluxo: setoresFluxo,
-      setorAtual: setorInicial,
-      setoresHistorico: [
-        {
-          setorId: setorInicial,
-          setorNome: setorInicialObj.nome,
-          entradaEm: new Date().toISOString(),
-          saidaEm: null,
-          usuarioEntrada: userEmail || 'Sistema',
-          usuarioEntradaNome: userName || userEmail || 'Sistema',
-          usuarioSaida: null,
-          usuarioSaidaNome: null,
-          observacoes: 'Pedido criado'
-        }
-      ],
+      // Sistema de setores (vazio inicialmente - será preenchido manualmente)
+      setoresFluxo: [],
+      setorAtual: null,
+      setoresHistorico: [],
       statusHistory: [
         {
-          status: `${setorInicialObj.nome} - Em Andamento`,
+          status: statusInicial,
           date: new Date().toISOString().split('T')[0],
           time: new Date().toTimeString().split(' ')[0].substring(0, 5),
           userId: userId || 'sistema',
