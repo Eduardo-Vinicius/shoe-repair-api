@@ -1000,38 +1000,3 @@ exports.getEstatisticasSetores = async (req, res) => {
     });
   }
 };
-    }
-
-    console.log('[PedidoController] Enviando detalhes do pedido via WhatsApp', {
-      pedidoId,
-      codigo: pedido.codigo,
-      telefone: telefoneCliente
-    });
-
-    const resultado = await whatsappService.enviarDetalhesPedidoWhatsApp(
-      telefoneCliente,
-      pedido,
-      cliente
-    );
-
-    if (resultado.success) {
-      res.status(200).json({
-        success: true,
-        message: 'Detalhes do pedido enviados com sucesso via WhatsApp',
-        data: resultado
-      });
-    } else {
-      res.status(400).json({
-        success: false,
-        error: resultado.error || 'Erro ao enviar detalhes'
-      });
-    }
-
-  } catch (error) {
-    console.error('Erro ao enviar detalhes via WhatsApp:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-};
