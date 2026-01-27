@@ -1,4 +1,14 @@
 const AWS = require('aws-sdk');
+import nodemailer from "nodemailer";
+
+// Configuração do transporte de e-mail
+const transporter = nodemailer.createTransport({
+  service: "gmail", // Usando o serviço Gmail
+  auth: {
+    user: process.env.GMAIL_USER, // Seu e-mail
+    pass: process.env.GMAIL_APP_PASSWORD, // Sua senha de aplicativo
+  },
+});
 
 // Configurar AWS SES
 const ses = new AWS.SES({
@@ -7,7 +17,72 @@ const ses = new AWS.SES({
 
 const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@yourdomain.com';
 const REPLY_TO_EMAIL = process.env.SES_REPLY_TO_EMAIL || FROM_EMAIL;
+export const gerarConteudoEmail = (order, status) => {
+  return `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+      <h2 style="color: #4CAF50;">${status === "Finalizado" ? "Pedido Finalizado" : "Pedido Cadastrado"}</h2>
+      <p>Olá,</p>
+      <p>Seu pedido foi <strong>${status}</strong> com sucesso! Aqui estão os detalhes do seu pedido:</p>
+      <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+        <thead>
+          <tr>
+            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Campo</th>
+            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Detalhes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="border: 1px solid #ddd; padding: 8px;">ID do Pedido</td>
+            <td style="border: 1px solid #ddd; padding: 8px;">${order.id}</td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #ddd; padding: 8px;">Descrição</td>
+            <td style="border: 1px solid #ddd; padding: 8px;">${order.descricao}</td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #ddd; padding: 8px;">Valor</td>
+            <td style="border: 1px solid #ddd; padding: 8px;">R$ ${order.valor.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #ddd; padding: 8px;">Setor</td>
+            <td style="border: 1px solid #ddd; padding: 8px;">${order.setor}</td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #ddd; padding: 8px;">Status</td>
+            <td style="border: 1px solid #ddd; padding: 8px;">${order.status}</td>
+          </tr>
+          <tr>
+            <td style="border: 1px solid #ddd; padding: 8px;">Data de Criação</td>
+            <td style="border: 1px solid #ddd; padding: 8px;">${new Date(order.createdAt).toLocaleString()}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p style="margin-top: 20px;">Obrigado por confiar em nossos serviços!</p>
+      <p>Atenciosamente,</p>
+      <p><strong>Sua Empresa</strong></p>
+    </div>
+  `;
+};
 
+// Função para enviar e-mail
+export const enviarEmail = async (to, subject, order, status) => {
+  const htmlContent = gerarConteudoEmail(order, status);
+
+  const mailOptions = {
+    from: process.env.GMAIL_USER, // Seu e-mail
+    to, // E-mail do destinatário
+    subject, // Assunto do e-mail
+    html: htmlContent, // Conteúdo HTML
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`E-mail enviado para ${to}`);
+  } catch (error) {
+    console.error("Erro ao enviar e-mail:", error);
+    throw new Error("Erro ao enviar e-mail");
+  }
+};
 /**
  * Gera o conteúdo HTML do email baseado no status do pedido
  * @param {string} nomeCliente
@@ -17,209 +92,209 @@ const REPLY_TO_EMAIL = process.env.SES_REPLY_TO_EMAIL || FROM_EMAIL;
  * @param {string} codigoPedido
  * @returns {object} { subject, html, text }
  */
-function gerarConteudoEmail(nomeCliente, status, descricaoServicos, modeloTenis, codigoPedido) {
-  const statusLower = status.toLowerCase();
+// function gerarConteudoEmail(nomeCliente, status, descricaoServicos, modeloTenis, codigoPedido) {
+//   const statusLower = status.toLowerCase();
   
-  // Email de criação do pedido
-  if (statusLower === 'criado' || statusLower === 'created' || statusLower.includes('aguardando')) {
-    return {
-      subject: `✅ Pedido #${codigoPedido} - Confirmação de Recebimento`,
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
-            .content { background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd; }
-            .footer { background-color: #f1f1f1; padding: 15px; text-align: center; font-size: 12px; color: #666; border-radius: 0 0 5px 5px; }
-            .info-box { background-color: white; padding: 15px; margin: 10px 0; border-left: 4px solid #4CAF50; }
-            .button { display: inline-block; padding: 10px 20px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin-top: 10px; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>🎉 Pedido Confirmado!</h1>
-            </div>
-            <div class="content">
-              <p>Olá <strong>${nomeCliente}</strong>,</p>
+//   // Email de criação do pedido
+//   if (statusLower === 'criado' || statusLower === 'created' || statusLower.includes('aguardando')) {
+//     return {
+//       subject: `✅ Pedido #${codigoPedido} - Confirmação de Recebimento`,
+//       html: `
+//         <!DOCTYPE html>
+//         <html>
+//         <head>
+//           <meta charset="UTF-8">
+//           <style>
+//             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+//             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+//             .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+//             .content { background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd; }
+//             .footer { background-color: #f1f1f1; padding: 15px; text-align: center; font-size: 12px; color: #666; border-radius: 0 0 5px 5px; }
+//             .info-box { background-color: white; padding: 15px; margin: 10px 0; border-left: 4px solid #4CAF50; }
+//             .button { display: inline-block; padding: 10px 20px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin-top: 10px; }
+//           </style>
+//         </head>
+//         <body>
+//           <div class="container">
+//             <div class="header">
+//               <h1>🎉 Pedido Confirmado!</h1>
+//             </div>
+//             <div class="content">
+//               <p>Olá <strong>${nomeCliente}</strong>,</p>
               
-              <p>Recebemos seu pedido com sucesso! Já estamos preparando tudo para cuidar do seu tênis.</p>
+//               <p>Recebemos seu pedido com sucesso! Já estamos preparando tudo para cuidar do seu tênis.</p>
               
-              <div class="info-box">
-                <h3>📦 Detalhes do Pedido</h3>
-                <p><strong>Código:</strong> #${codigoPedido}</p>
-                <p><strong>Tênis:</strong> ${modeloTenis}</p>
-                <p><strong>Serviços:</strong> ${descricaoServicos}</p>
-              </div>
+//               <div class="info-box">
+//                 <h3>📦 Detalhes do Pedido</h3>
+//                 <p><strong>Código:</strong> #${codigoPedido}</p>
+//                 <p><strong>Tênis:</strong> ${modeloTenis}</p>
+//                 <p><strong>Serviços:</strong> ${descricaoServicos}</p>
+//               </div>
               
-              <p>Você receberá atualizações por email sempre que o status do seu pedido mudar.</p>
+//               <p>Você receberá atualizações por email sempre que o status do seu pedido mudar.</p>
               
-              <p>Se tiver alguma dúvida, basta responder este email.</p>
+//               <p>Se tiver alguma dúvida, basta responder este email.</p>
               
-              <p>Obrigado pela confiança! 🙏</p>
-            </div>
-            <div class="footer">
-              <p>Este é um email automático. Para dúvidas, responda este email ou entre em contato conosco.</p>
-            </div>
-          </div>
-        </body>
-        </html>
-      `,
-      text: `
-Olá ${nomeCliente},
+//               <p>Obrigado pela confiança! 🙏</p>
+//             </div>
+//             <div class="footer">
+//               <p>Este é um email automático. Para dúvidas, responda este email ou entre em contato conosco.</p>
+//             </div>
+//           </div>
+//         </body>
+//         </html>
+//       `,
+//       text: `
+// Olá ${nomeCliente},
 
-Recebemos seu pedido com sucesso!
+// Recebemos seu pedido com sucesso!
 
-Detalhes do Pedido:
-- Código: #${codigoPedido}
-- Tênis: ${modeloTenis}
-- Serviços: ${descricaoServicos}
+// Detalhes do Pedido:
+// - Código: #${codigoPedido}
+// - Tênis: ${modeloTenis}
+// - Serviços: ${descricaoServicos}
 
-Você receberá atualizações por email sempre que o status mudar.
+// Você receberá atualizações por email sempre que o status mudar.
 
-Obrigado pela confiança!
-      `
-    };
-  }
+// Obrigado pela confiança!
+//       `
+//     };
+//   }
   
-  // Email de pedido finalizado
-  if (statusLower === 'concluido' || statusLower === 'finalizado' || statusLower.includes('finalizado')) {
-    return {
-      subject: `🎊 Pedido #${codigoPedido} - Finalizado! Pronto para Retirada`,
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #2196F3; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
-            .content { background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd; }
-            .footer { background-color: #f1f1f1; padding: 15px; text-align: center; font-size: 12px; color: #666; border-radius: 0 0 5px 5px; }
-            .info-box { background-color: white; padding: 15px; margin: 10px 0; border-left: 4px solid #2196F3; }
-            .highlight { background-color: #FFF3CD; padding: 15px; border-radius: 5px; margin: 15px 0; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>🎊 Seu Pedido Está Pronto!</h1>
-            </div>
-            <div class="content">
-              <p>Olá <strong>${nomeCliente}</strong>,</p>
+//   // Email de pedido finalizado
+//   if (statusLower === 'concluido' || statusLower === 'finalizado' || statusLower.includes('finalizado')) {
+//     return {
+//       subject: `🎊 Pedido #${codigoPedido} - Finalizado! Pronto para Retirada`,
+//       html: `
+//         <!DOCTYPE html>
+//         <html>
+//         <head>
+//           <meta charset="UTF-8">
+//           <style>
+//             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+//             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+//             .header { background-color: #2196F3; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+//             .content { background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd; }
+//             .footer { background-color: #f1f1f1; padding: 15px; text-align: center; font-size: 12px; color: #666; border-radius: 0 0 5px 5px; }
+//             .info-box { background-color: white; padding: 15px; margin: 10px 0; border-left: 4px solid #2196F3; }
+//             .highlight { background-color: #FFF3CD; padding: 15px; border-radius: 5px; margin: 15px 0; }
+//           </style>
+//         </head>
+//         <body>
+//           <div class="container">
+//             <div class="header">
+//               <h1>🎊 Seu Pedido Está Pronto!</h1>
+//             </div>
+//             <div class="content">
+//               <p>Olá <strong>${nomeCliente}</strong>,</p>
               
-              <p>Ótimas notícias! Seu pedido foi finalizado e está pronto para retirada! 🎉</p>
+//               <p>Ótimas notícias! Seu pedido foi finalizado e está pronto para retirada! 🎉</p>
               
-              <div class="info-box">
-                <h3>📦 Detalhes do Pedido</h3>
-                <p><strong>Código:</strong> #${codigoPedido}</p>
-                <p><strong>Tênis:</strong> ${modeloTenis}</p>
-                <p><strong>Serviços Realizados:</strong> ${descricaoServicos}</p>
-              </div>
+//               <div class="info-box">
+//                 <h3>📦 Detalhes do Pedido</h3>
+//                 <p><strong>Código:</strong> #${codigoPedido}</p>
+//                 <p><strong>Tênis:</strong> ${modeloTenis}</p>
+//                 <p><strong>Serviços Realizados:</strong> ${descricaoServicos}</p>
+//               </div>
               
-              <div class="highlight">
-                <h3>👟 Próximos Passos</h3>
-                <p>Seu tênis está aguardando por você! Venha retirá-lo em nossa loja.</p>
-                <p><strong>Não esqueça de trazer o código do pedido: #${codigoPedido}</strong></p>
-              </div>
+//               <div class="highlight">
+//                 <h3>👟 Próximos Passos</h3>
+//                 <p>Seu tênis está aguardando por você! Venha retirá-lo em nossa loja.</p>
+//                 <p><strong>Não esqueça de trazer o código do pedido: #${codigoPedido}</strong></p>
+//               </div>
               
-              <p>Agradecemos pela confiança e esperamos vê-lo em breve! 🙏</p>
-            </div>
-            <div class="footer">
-              <p>Este é um email automático. Para dúvidas, responda este email ou entre em contato conosco.</p>
-            </div>
-          </div>
-        </body>
-        </html>
-      `,
-      text: `
-Olá ${nomeCliente},
+//               <p>Agradecemos pela confiança e esperamos vê-lo em breve! 🙏</p>
+//             </div>
+//             <div class="footer">
+//               <p>Este é um email automático. Para dúvidas, responda este email ou entre em contato conosco.</p>
+//             </div>
+//           </div>
+//         </body>
+//         </html>
+//       `,
+//       text: `
+// Olá ${nomeCliente},
 
-Ótimas notícias! Seu pedido foi finalizado e está pronto para retirada!
+// Ótimas notícias! Seu pedido foi finalizado e está pronto para retirada!
 
-Detalhes do Pedido:
-- Código: #${codigoPedido}
-- Tênis: ${modeloTenis}
-- Serviços Realizados: ${descricaoServicos}
+// Detalhes do Pedido:
+// - Código: #${codigoPedido}
+// - Tênis: ${modeloTenis}
+// - Serviços Realizados: ${descricaoServicos}
 
-Próximos Passos:
-Seu tênis está aguardando por você! Venha retirá-lo em nossa loja.
-Não esqueça de trazer o código do pedido: #${codigoPedido}
+// Próximos Passos:
+// Seu tênis está aguardando por você! Venha retirá-lo em nossa loja.
+// Não esqueça de trazer o código do pedido: #${codigoPedido}
 
-Agradecemos pela confiança!
-      `
-    };
-  }
+// Agradecemos pela confiança!
+//       `
+//     };
+//   }
   
-  // Email de atualização de status genérico
-  return {
-    subject: `📢 Pedido #${codigoPedido} - Atualização de Status`,
-    html: `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background-color: #FF9800; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
-          .content { background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd; }
-          .footer { background-color: #f1f1f1; padding: 15px; text-align: center; font-size: 12px; color: #666; border-radius: 0 0 5px 5px; }
-          .info-box { background-color: white; padding: 15px; margin: 10px 0; border-left: 4px solid #FF9800; }
-          .status { font-size: 18px; font-weight: bold; color: #FF9800; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>📢 Atualização do Pedido</h1>
-          </div>
-          <div class="content">
-            <p>Olá <strong>${nomeCliente}</strong>,</p>
+//   // Email de atualização de status genérico
+//   return {
+//     subject: `📢 Pedido #${codigoPedido} - Atualização de Status`,
+//     html: `
+//       <!DOCTYPE html>
+//       <html>
+//       <head>
+//         <meta charset="UTF-8">
+//         <style>
+//           body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+//           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+//           .header { background-color: #FF9800; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+//           .content { background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd; }
+//           .footer { background-color: #f1f1f1; padding: 15px; text-align: center; font-size: 12px; color: #666; border-radius: 0 0 5px 5px; }
+//           .info-box { background-color: white; padding: 15px; margin: 10px 0; border-left: 4px solid #FF9800; }
+//           .status { font-size: 18px; font-weight: bold; color: #FF9800; }
+//         </style>
+//       </head>
+//       <body>
+//         <div class="container">
+//           <div class="header">
+//             <h1>📢 Atualização do Pedido</h1>
+//           </div>
+//           <div class="content">
+//             <p>Olá <strong>${nomeCliente}</strong>,</p>
             
-            <p>Seu pedido teve uma atualização de status!</p>
+//             <p>Seu pedido teve uma atualização de status!</p>
             
-            <div class="info-box">
-              <h3>📦 Detalhes do Pedido</h3>
-              <p><strong>Código:</strong> #${codigoPedido}</p>
-              <p><strong>Tênis:</strong> ${modeloTenis}</p>
-              <p><strong>Serviços:</strong> ${descricaoServicos}</p>
-              <p class="status">Status Atual: ${status}</p>
-            </div>
+//             <div class="info-box">
+//               <h3>📦 Detalhes do Pedido</h3>
+//               <p><strong>Código:</strong> #${codigoPedido}</p>
+//               <p><strong>Tênis:</strong> ${modeloTenis}</p>
+//               <p><strong>Serviços:</strong> ${descricaoServicos}</p>
+//               <p class="status">Status Atual: ${status}</p>
+//             </div>
             
-            <p>Continue acompanhando seu pedido. Você receberá novos emails a cada mudança de status.</p>
+//             <p>Continue acompanhando seu pedido. Você receberá novos emails a cada mudança de status.</p>
             
-            <p>Obrigado pela confiança! 🙏</p>
-          </div>
-          <div class="footer">
-            <p>Este é um email automático. Para dúvidas, responda este email ou entre em contato conosco.</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `,
-    text: `
-Olá ${nomeCliente},
+//             <p>Obrigado pela confiança! 🙏</p>
+//           </div>
+//           <div class="footer">
+//             <p>Este é um email automático. Para dúvidas, responda este email ou entre em contato conosco.</p>
+//           </div>
+//         </div>
+//       </body>
+//       </html>
+//     `,
+//     text: `
+// Olá ${nomeCliente},
 
-Seu pedido teve uma atualização de status!
+// Seu pedido teve uma atualização de status!
 
-Detalhes do Pedido:
-- Código: #${codigoPedido}
-- Tênis: ${modeloTenis}
-- Serviços: ${descricaoServicos}
-- Status Atual: ${status}
+// Detalhes do Pedido:
+// - Código: #${codigoPedido}
+// - Tênis: ${modeloTenis}
+// - Serviços: ${descricaoServicos}
+// - Status Atual: ${status}
 
-Continue acompanhando seu pedido.
+// Continue acompanhando seu pedido.
 
-Obrigado pela confiança!
-    `
-  };
-}
+// Obrigado pela confiança!
+//     `
+//   };
+// }
 
 /**
  * Envia email de notificação de status do pedido para o cliente

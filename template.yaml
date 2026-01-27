@@ -31,6 +31,8 @@ Resources:
           REFRESH_SECRET: !Ref RefreshSecret
           JWT_EXPIRES: !Ref JWTExpires
           REFRESH_EXPIRES: !Ref RefreshExpires
+          GMAIL_USER: primeastore8@gmail.com # Adiciona o e-mail do Gmail
+          GMAIL_APP_PASSWORD: Eduardo@20 # Adiciona a senha do aplicativo do Gmail
   JWTSecret:
     Type: AWS::SSM::Parameter
     Properties:
