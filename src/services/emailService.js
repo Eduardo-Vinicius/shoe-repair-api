@@ -185,8 +185,6 @@ Obrigado pela confiança!
   };
 }
 
-// Exporta as funções
-module.exports = { gerarConteudoEmail };
 
 // Configurar AWS SES
 const ses = new AWS.SES({
@@ -195,72 +193,38 @@ const ses = new AWS.SES({
 
 const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@yourdomain.com';
 const REPLY_TO_EMAIL = process.env.SES_REPLY_TO_EMAIL || FROM_EMAIL;
-export const gerarConteudoEmail = (order, status) => {
-  return `
-    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-      <h2 style="color: #4CAF50;">${status === "Finalizado" ? "Pedido Finalizado" : "Pedido Cadastrado"}</h2>
-      <p>Olá,</p>
-      <p>Seu pedido foi <strong>${status}</strong> com sucesso! Aqui estão os detalhes do seu pedido:</p>
-      <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-        <thead>
-          <tr>
-            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Campo</th>
-            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Detalhes</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td style="border: 1px solid #ddd; padding: 8px;">ID do Pedido</td>
-            <td style="border: 1px solid #ddd; padding: 8px;">${order.id}</td>
-          </tr>
-          <tr>
-            <td style="border: 1px solid #ddd; padding: 8px;">Descrição</td>
-            <td style="border: 1px solid #ddd; padding: 8px;">${order.descricao}</td>
-          </tr>
-          <tr>
-            <td style="border: 1px solid #ddd; padding: 8px;">Valor</td>
-            <td style="border: 1px solid #ddd; padding: 8px;">R$ ${order.valor.toFixed(2)}</td>
-          </tr>
-          <tr>
-            <td style="border: 1px solid #ddd; padding: 8px;">Setor</td>
-            <td style="border: 1px solid #ddd; padding: 8px;">${order.setor}</td>
-          </tr>
-          <tr>
-            <td style="border: 1px solid #ddd; padding: 8px;">Status</td>
-            <td style="border: 1px solid #ddd; padding: 8px;">${order.status}</td>
-          </tr>
-          <tr>
-            <td style="border: 1px solid #ddd; padding: 8px;">Data de Criação</td>
-            <td style="border: 1px solid #ddd; padding: 8px;">${new Date(order.createdAt).toLocaleString()}</td>
-          </tr>
-        </tbody>
-      </table>
-      <p style="margin-top: 20px;">Obrigado por confiar em nossos serviços!</p>
-      <p>Atenciosamente,</p>
-      <p><strong>Sua Empresa</strong></p>
-    </div>
-  `;
-};
 
-// Função para enviar e-mail
-export const enviarEmail = async (to, subject, order, status) => {
-  const htmlContent = gerarConteudoEmail(order, status);
+// Função para enviar e-mail via Nodemailer (Gmail)
+// Mantém compatibilidade CommonJS (sem `export`)
+async function enviarEmail(to, subject, order, status) {
+  // Reaproveita o gerador principal (retorna { subject, html, text })
+  const conteudo = gerarConteudoEmail(
+    order?.clientName || order?.nomeCliente || 'Cliente',
+    status,
+    order?.descricaoServicos || order?.servicos || order?.serviceType || order?.description || 'Serviços',
+    order?.modeloTenis || order?.sneaker || order?.modelo || 'Tênis',
+    order?.codigo || order?.id || 'N/A'
+  );
 
   const mailOptions = {
-    from: process.env.GMAIL_USER, // Seu e-mail
-    to, // E-mail do destinatário
-    subject, // Assunto do e-mail
-    html: htmlContent, // Conteúdo HTML
+    from: process.env.GMAIL_USER,
+    to,
+    subject: (subject && String(subject).trim()) ? subject : conteudo.subject,
+    html: conteudo.html,
+    text: conteudo.text,
+    replyTo: REPLY_TO_EMAIL,
   };
 
   try {
     await transporter.sendMail(mailOptions);
-    console.log(`E-mail enviado para ${to}`);
+    console.log(`[Email/Nodemailer] E-mail enviado para ${to}`);
+    return true;
   } catch (error) {
-    console.error("Erro ao enviar e-mail:", error);
-    throw new Error("Erro ao enviar e-mail");
+    console.error('[Email/Nodemailer] Erro ao enviar e-mail:', error);
+    // Não lança erro para não quebrar o fluxo principal
+    return false;
   }
-};
+}
 /**
  * Gera o conteúdo HTML do email baseado no status do pedido
  * @param {string} nomeCliente
@@ -607,6 +571,7 @@ async function enviarSMSStatus(telefoneCliente, nomeCliente, status, codigoPedid
 
 module.exports = {
   enviarStatusPedido,
+  enviarEmail,
   enviarSMSStatus, // Função preparada para futura implementação
   gerarConteudoEmail
 };
