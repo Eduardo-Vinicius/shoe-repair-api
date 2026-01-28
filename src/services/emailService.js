@@ -1,5 +1,5 @@
 const AWS = require('aws-sdk');
-import nodemailer from "nodemailer";
+const nodemailer = require("nodemailer");
 
 // Configuração do transporte de e-mail
 const transporter = nodemailer.createTransport({

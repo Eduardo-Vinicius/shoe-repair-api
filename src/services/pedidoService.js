@@ -1,6 +1,6 @@
 const AWS = require('aws-sdk');
 const { v4: uuidv4 } = require('uuid');
-const { enviarEmail } = require('./emailService'); // Importa o serviço de e-mail
+const { enviarEmail } = require("./emailService");
 const tableName = process.env.DYNAMODB_PEDIDO_TABLE || 'shoeRepairPedidos';
 
 const dynamoDb = new AWS.DynamoDB.DocumentClient({ region: process.env.AWS_REGION });
