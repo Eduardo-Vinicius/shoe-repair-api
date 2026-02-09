@@ -245,34 +245,7 @@ exports.createPedido = async (req, res) => {
 
     const novoPedido = await pedidoService.createPedido(dadosPedido);
     
-    // Enviar notificação por email para o cliente sobre a criação do pedido
-    try {
-      console.log('[PedidoController] Enviando notificação por email para criação do pedido...');
-      
-      // Buscar dados do cliente
-      const cliente = await clienteService.getCliente(clienteId);
-      if (cliente && cliente.email && cliente.nome) {
-        const descricaoServicos = servicos.map(s => s.nome).join(', ');
-        await emailService.enviarStatusPedido(
-          cliente.email,
-          cliente.nome,
-          'criado',
-          descricaoServicos,
-          modeloTenis,
-          novoPedido.codigo
-        );
-        console.log('[PedidoController] Notificação por email de criação enviada com sucesso');
-      } else {
-        console.log('[PedidoController] Dados do cliente insuficientes para envio de email:', {
-          clienteEncontrado: !!cliente,
-          email: cliente ? !!cliente.email : false,
-          nome: cliente ? !!cliente.nome : false
-        });
-      }
-    } catch (emailError) {
-      console.error('[PedidoController] Erro ao enviar email de criação:', emailError);
-      // Não falhar a operação por erro no email
-    }
+   
     
     res.status(201).json({
       success: true,

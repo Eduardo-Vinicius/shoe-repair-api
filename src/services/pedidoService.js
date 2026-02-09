@@ -1,5 +1,7 @@
 const AWS = require('aws-sdk');
 const { v4: uuidv4 } = require('uuid');
+const { enviarEmail } = require("./emailService");
+const { getCliente } = require('./clienteService');
 const tableName = process.env.DYNAMODB_PEDIDO_TABLE || 'shoeRepairPedidos';
 
 const dynamoDb = new AWS.DynamoDB.DocumentClient({ region: process.env.AWS_REGION });
@@ -83,7 +85,6 @@ exports.getPedido = async (id) => {
 };
 
 exports.createPedido = async (pedido) => {
-  // Estruturar o pedido com todos os campos necessários
   // Gera um código sequencial para o pedido
   const codigoPedido = await gerarCodigoPedido();
 
@@ -127,7 +128,28 @@ exports.createPedido = async (pedido) => {
 
   const params = { TableName: tableName, Item: novoPedido };
   await dynamoDb.put(params).promise();
-  return novoPedido;
+
+  // Enviar e-mail após criar o pedido
+    try {
+      const cliente = await getCliente(novoPedido.clienteId);
+      const subject = `✅ Pedido #${codigoPedido} - Confirmação de Recebimento`;
+  
+      const emailCliente = (cliente && cliente.email) ? String(cliente.email).trim() : null;
+  
+      if (!emailCliente) {
+        console.warn('[PedidoService] Nenhum e-mail encontrado no cadastro do cliente. E-mail não enviado.', {
+          clienteId: novoPedido.clienteId,
+          codigo: codigoPedido
+        });
+      } else {
+        await enviarEmail(emailCliente, subject, novoPedido, 'Criado');
+        console.log(`[PedidoService] E-mail enviado para ${emailCliente} com sucesso.`);
+      }
+    } catch (error) {
+      console.error('[PedidoService] Erro ao buscar cliente e/ou enviar e-mail de confirmação:', error.message);
+    }
+  
+    return novoPedido;
 };
 
 exports.updatePedido = async (id, updates) => {
