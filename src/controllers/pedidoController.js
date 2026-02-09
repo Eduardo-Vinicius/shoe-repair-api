@@ -181,7 +181,7 @@ exports.createPedido = async (req, res) => {
       valorSinal: valorSinal || 0,
       valorRestante: valorRestante || (precoTotal - (valorSinal || 0)),
       dataPrevistaEntrega,
-      departamento: departamento || '',
+      departamento: departamento || 'Atendimento',
       observacoes: observacoes || '',
       garantia: garantia || {
         ativa: false,
@@ -201,7 +201,7 @@ exports.createPedido = async (req, res) => {
         userEmail: userEmail || 'sistema@app.com',
         userRole: role || 'sistema'
       },
-      // Sistema de setores (vazio inicialmente - será preenchido manualmente)
+      // Sistema de setores: inicia em Atendimento e gera fluxo automaticamente
       setoresFluxo: [],
       setorAtual: null,
       setoresHistorico: [],
@@ -215,6 +215,33 @@ exports.createPedido = async (req, res) => {
         }
       ]
     };
+
+    // Gerar fluxo de setores com base nos serviços e abrir Atendimento
+    try {
+      const fluxo = setorService.determinarSetoresPorServicos(servicos);
+      const agora = new Date().toISOString();
+
+      dadosPedido.setoresFluxo = fluxo;
+      dadosPedido.setorAtual = 'atendimento-inicial';
+      dadosPedido.setoresHistorico = [
+        {
+          setorId: 'atendimento-inicial',
+          setorNome: 'Atendimento',
+          entradaEm: agora,
+          saidaEm: null,
+          usuarioEntrada: userEmail || 'sistema@app.com',
+          usuarioEntradaNome: userName || userEmail || 'Sistema',
+          funcionarioEntrada: userName || userEmail || 'Sistema',
+          usuarioSaida: null,
+          usuarioSaidaNome: null,
+          funcionarioSaida: '',
+          observacoes: ''
+        }
+      ];
+    } catch (fluxError) {
+      console.warn('[PedidoController] Falha ao determinar fluxo de setores:', fluxError.message);
+      // Mantém setores vazios se houver erro na determinação
+    }
 
     const novoPedido = await pedidoService.createPedido(dadosPedido);
     

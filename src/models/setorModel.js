@@ -74,12 +74,12 @@ const SETORES_PADRAO = [
   },
   {
     id: 'atendimento-final',
-    nome: 'Atendimento Final',
+    nome: 'Atendimento (email)',
     ordem: 7,
     obrigatorio: true,
     cor: '#4CAF50',
     icone: 'check_circle',
-    descricao: 'Finalização e entrega ao cliente',
+    descricao: 'Finalização e entrega ao cliente (dispara notificação por e-mail)',
     ativo: true
   }
 ];

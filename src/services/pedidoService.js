@@ -108,11 +108,17 @@ exports.createPedido = async (pedido) => {
       data: ''
     },
     acessorios: pedido.acessorios || [],
-    status: pedido.status || 'Atendimento - Aguardando Aprovação',
+    status: pedido.status || 'Atendimento - Recebido',
     dataCriacao: pedido.dataCriacao || new Date().toISOString(),
     createdAt: pedido.createdAt || new Date().toISOString(),
     updatedAt: pedido.updatedAt || new Date().toISOString(),
     statusHistory: pedido.statusHistory || [],
+    // Persistir dados do criador do pedido
+    createdBy: pedido.createdBy || null,
+    // Persistir campos do sistema de setores
+    setoresFluxo: Array.isArray(pedido.setoresFluxo) ? pedido.setoresFluxo : [],
+    setorAtual: pedido.setorAtual || null,
+    setoresHistorico: Array.isArray(pedido.setoresHistorico) ? pedido.setoresHistorico : [],
     // Manter compatibilidade com campos antigos se existirem
     tipoServico: pedido.tipoServico,
     descricaoServicos: pedido.descricaoServicos,
