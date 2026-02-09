@@ -54,7 +54,11 @@ exports.listPedidosStatus = async (req, res) => {
         data: ''
       },
       acessorios: pedido.acessorios || [],
-      prioridade: pedido.prioridade || 2
+      prioridade: pedido.prioridade || 2,
+      setorAtual: pedido.setorAtual || null,
+      departamento: pedido.departamento || '',
+      setoresHistorico: pedido.setoresHistorico || [],
+      updatedBy: pedido.updatedBy || ''
     }));
 
     // Ordenar por prioridade (1=alta primeiro) e depois por data (mais recentes primeiro)
