@@ -11,8 +11,23 @@ const transporter = nodemailer.createTransport({
 });
 
 // Função para gerar o conteúdo do e-mail com HTML estilizado
-function gerarConteudoEmail(nomeCliente, status, descricaoServicos, modeloTenis, codigoPedido) {
+function gerarConteudoEmail(nomeCliente, status, descricaoServicos, modeloTenis, codigoPedido, fotos = []) {
   const statusLower = status.toLowerCase();
+  
+  // Gerar HTML das fotos se existirem
+  let fotosHtml = '';
+  if (fotos && fotos.length > 0) {
+    fotosHtml = `
+      <div class="info-box">
+        <h3>📸 Fotos do Pedido</h3>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
+          ${fotos.map(foto => `
+            <img src="${foto}" alt="Foto do pedido" style="width: 150px; height: 150px; object-fit: cover; border-radius: 5px; border: 2px solid #ddd;" />
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
 
   // Email de criação do pedido
   if (statusLower === "criado" || statusLower === "created" || statusLower.includes("aguardando")) {
@@ -46,6 +61,7 @@ function gerarConteudoEmail(nomeCliente, status, descricaoServicos, modeloTenis,
                 <p><strong>Tênis:</strong> ${modeloTenis}</p>
                 <p><strong>Serviços:</strong> ${descricaoServicos}</p>
               </div>
+              ${fotosHtml}
               <p>Você receberá atualizações por email sempre que o status do seu pedido mudar.</p>
               <p>Obrigado pela confiança! 🙏</p>
             </div>
@@ -105,6 +121,7 @@ Obrigado pela confiança!
                 <p><strong>Tênis:</strong> ${modeloTenis}</p>
                 <p><strong>Serviços Realizados:</strong> ${descricaoServicos}</p>
               </div>
+              ${fotosHtml}
               <p>Agradecemos pela confiança e esperamos vê-lo em breve! 🙏</p>
             </div>
             <div class="footer">
@@ -143,6 +160,7 @@ Agradecemos pela confiança!
           .header { background-color: #FF9800; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
           .content { background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd; }
           .footer { background-color: #f1f1f1; padding: 15px; text-align: center; font-size: 12px; color: #666; border-radius: 0 0 5px 5px; }
+          .info-box { background-color: white; padding: 15px; margin: 10px 0; border-left: 4px solid #FF9800; }
         </style>
       </head>
       <body>
@@ -160,6 +178,7 @@ Agradecemos pela confiança!
               <p><strong>Serviços:</strong> ${descricaoServicos}</p>
               <p><strong>Status Atual:</strong> ${status}</p>
             </div>
+            ${fotosHtml}
             <p>Obrigado pela confiança! 🙏</p>
           </div>
           <div class="footer">
@@ -462,7 +481,7 @@ async function enviarEmail(to, subject, order, status) {
  * @param {string} modeloTenis - Modelo do tênis
  * @param {string} codigoPedido - Código do pedido
  */
-async function enviarStatusPedido(emailCliente, nomeCliente, status, descricaoServicos, modeloTenis, codigoPedido = 'N/A') {
+async function enviarStatusPedido(emailCliente, nomeCliente, status, descricaoServicos, modeloTenis, codigoPedido = 'N/A', fotos = []) {
   console.log('[Email] Iniciando envio de email de status do pedido:', {
     emailCliente,
     nomeCliente,
@@ -470,6 +489,7 @@ async function enviarStatusPedido(emailCliente, nomeCliente, status, descricaoSe
     descricaoServicos,
     modeloTenis,
     codigoPedido,
+    fotosCount: fotos?.length || 0,
     timestamp: new Date().toISOString()
   });
 
@@ -486,7 +506,7 @@ async function enviarStatusPedido(emailCliente, nomeCliente, status, descricaoSe
   }
 
   try {
-    const { subject, html, text } = gerarConteudoEmail(nomeCliente, status, descricaoServicos, modeloTenis, codigoPedido);
+    const { subject, html, text } = gerarConteudoEmail(nomeCliente, status, descricaoServicos, modeloTenis, codigoPedido, fotos);
     
     const params = {
       Source: FROM_EMAIL,
@@ -550,43 +570,100 @@ async function enviarStatusPedido(emailCliente, nomeCliente, status, descricaoSe
 }
 
 /**
- * Função preparada para futura implementação de SMS via AWS SNS
+ * Envia SMS de status do pedido via AWS SNS
+ * IMPORTANTE: SMS é enviado APENAS quando o pedido está finalizado (pronto para retirada)
  * @param {string} telefoneCliente - Telefone do cliente (formato: +5511999999999)
  * @param {string} nomeCliente - Nome do cliente
  * @param {string} status - Status atual do pedido
  * @param {string} codigoPedido - Código do pedido
+ * @returns {Promise<object|null>} Resultado do envio ou null se desabilitado/erro
  */
 async function enviarSMSStatus(telefoneCliente, nomeCliente, status, codigoPedido) {
-  console.log('[SMS] Função de SMS ainda não implementada. Será implementada em breve.');
-  console.log('[SMS] Dados para envio futuro:', {
-    telefoneCliente,
-    nomeCliente,
-    status,
-    codigoPedido
-  });
+  // Verificar se SMS está habilitado
+  const smsEnabled = process.env.SMS_ENABLED === 'true';
   
-  // TODO: Implementar SNS para SMS
-  // const sns = new AWS.SNS({ region: process.env.AWS_REGION || 'us-east-1' });
-  // 
-  // const params = {
-  //   Message: `Olá ${nomeCliente}! Seu pedido #${codigoPedido} foi atualizado: ${status}`,
-  //   PhoneNumber: telefoneCliente,
-  //   MessageAttributes: {
-  //     'AWS.SNS.SMS.SMSType': {
-  //       DataType: 'String',
-  //       StringValue: 'Transactional'
-  //     }
-  //   }
-  // };
-  // 
-  // return await sns.publish(params).promise();
-  
-  return null;
+  if (!smsEnabled) {
+    console.log('[SMS] ⏸️  SMS desabilitado. Configure SMS_ENABLED=true para ativar.');
+    return null;
+  }
+
+  // ENVIAR SMS APENAS PARA STATUS FINALIZADOS (economia de custos)
+  const statusLower = (status || '').toLowerCase();
+  const isStatusFinalizado = 
+    statusLower.includes('atendimento - finalizado') ||
+    statusLower.includes('finalizado') ||
+    statusLower.includes('pronto para retirada') ||
+    statusLower.includes('aguardando retirada');
+
+  if (!isStatusFinalizado) {
+    console.log('[SMS] ⏭️  SMS não enviado - apenas para status finalizados. Status atual:', status);
+    return null;
+  }
+
+  // Validar formato do telefone
+  if (!telefoneCliente || !telefoneCliente.startsWith('+')) {
+    console.error('[SMS] ❌ Telefone inválido. Use formato internacional: +5511999999999');
+    return null;
+  }
+
+  try {
+    console.log('[SMS] 📱 Enviando SMS...', {
+      telefone: telefoneCliente.substring(0, 6) + '****', // Oculta parte do número
+      nomeCliente,
+      status,
+      codigoPedido
+    });
+
+    const sns = new AWS.SNS({ region: process.env.AWS_REGION || 'us-east-1' });
+    
+    // Mensagem otimizada para status finalizado (SMS tem limite de 160 caracteres)
+    const mensagem = `${nomeCliente}, seu pedido #${codigoPedido} esta pronto para retirada! Aguardamos voce. Obrigado!`;
+    
+    const params = {
+      Message: mensagem,
+      PhoneNumber: telefoneCliente,
+      MessageAttributes: {
+        'AWS.SNS.SMS.SMSType': {
+          DataType: 'String',
+          StringValue: 'Transactional' // SMS transacional (não marketing)
+        },
+        'AWS.SNS.SMS.SenderID': {
+          DataType: 'String',
+          StringValue: process.env.SMS_SENDER_ID || 'ShoeRepair' // Nome que aparece (nem todos países suportam)
+        }
+      }
+    };
+
+    const startTime = Date.now();
+    const result = await sns.publish(params).promise();
+    const duration = Date.now() - startTime;
+
+    console.log('[SMS] ✅ SMS enviado com sucesso!', {
+      telefone: telefoneCliente.substring(0, 6) + '****',
+      messageId: result.MessageId,
+      duracaoMs: duration,
+      caracteres: mensagem.length,
+      timestamp: new Date().toISOString()
+    });
+
+    return result;
+  } catch (err) {
+    console.error('[SMS] ❌ Erro ao enviar SMS:', {
+      telefone: telefoneCliente.substring(0, 6) + '****',
+      errorMessage: err.message,
+      errorCode: err.code,
+      stack: err.stack,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Não lança o erro para não quebrar o fluxo principal
+    return null;
+  }
 }
 
 module.exports = {
   enviarStatusPedido,
   enviarEmail,
-  enviarSMSStatus, // Função preparada para futura implementação
+  enviarSMSStatus, // Função de SMS via AWS SNS
   gerarConteudoEmail
 };

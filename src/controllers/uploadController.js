@@ -10,15 +10,31 @@ exports.uploadFotos = async (req, res) => {
       return res.status(400).json({ error: 'Máximo de 8 fotos permitido.' });
     }
     const bucket = process.env.S3_BUCKET_NAME;
-    const { userId, pedidoId } = req.body;
-    if (!userId || !pedidoId) {
-      return res.status(400).json({ error: 'userId e pedidoId são obrigatórios no body.' });
+    const { pedidoId } = req.body;
+    
+    if (!pedidoId) {
+      return res.status(400).json({ error: 'pedidoId é obrigatório no body.' });
     }
-    // Limpa a pasta do pedido antes de inserir novas imagens
-    const prefix = `User/${userId}/pedidos/${pedidoId}/`;
+
+    // Buscar o clienteId do pedido
+    const pedidoService = require('../services/pedidoService');
+    const pedido = await pedidoService.getPedido(pedidoId);
+    if (!pedido) {
+      return res.status(404).json({ error: 'Pedido não encontrado.' });
+    }
+    const clienteId = pedido.clienteId;
+
+    console.log('[UploadController] Fazendo upload de fotos:', {
+      pedidoId,
+      clienteId,
+      quantidade: req.files.length
+    });
+
+    // CORREÇÃO: Limpa APENAS a pasta de fotos (não remove PDFs!)
+    const fotosPrefix = `clientes/${clienteId}/pedidos/${pedidoId}/fotos/`;
     const listParams = {
       Bucket: bucket,
-      Prefix: prefix
+      Prefix: fotosPrefix
     };
     const listedObjects = await s3.listObjectsV2(listParams).promise();
     if (listedObjects.Contents.length > 0) {
@@ -27,13 +43,14 @@ exports.uploadFotos = async (req, res) => {
         Delete: { Objects: listedObjects.Contents.map(obj => ({ Key: obj.Key })) }
       };
       await s3.deleteObjects(deleteParams).promise();
+      console.log(`[UploadController] ${listedObjects.Contents.length} fotos antigas removidas`);
     }
 
-    // Salva as imagens como imagem1, imagem2, ...
+    // Salva as fotos na nova estrutura organizada
     const uploadedUrls = [];
     let idx = 1;
     for (const file of req.files) {
-      const key = `User/${userId}/pedidos/${pedidoId}/imagem${idx}${getFileExtension(file.originalname)}`;
+      const key = `clientes/${clienteId}/pedidos/${pedidoId}/fotos/foto-${idx}${getFileExtension(file.originalname)}`;
       const params = {
         Bucket: bucket,
         Key: key,
@@ -42,14 +59,18 @@ exports.uploadFotos = async (req, res) => {
       };
       const data = await s3.upload(params).promise();
       uploadedUrls.push(data.Location);
+      console.log(`[UploadController] Foto ${idx} salva: ${key}`);
       idx++;
     }
 
     // Atualiza o pedido no DynamoDB com as URLs das imagens
-    const pedidoService = require('../services/pedidoService');
     await pedidoService.updatePedido(pedidoId, { fotos: uploadedUrls });
 
-    res.status(200).json({ urls: uploadedUrls });
+    res.status(200).json({ 
+      success: true,
+      urls: uploadedUrls,
+      message: `${uploadedUrls.length} foto(s) salva(s) com sucesso`
+    });
 
 // Função auxiliar para pegar a extensão do arquivo
 function getFileExtension(filename) {

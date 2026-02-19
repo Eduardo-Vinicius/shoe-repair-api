@@ -249,31 +249,39 @@ exports.createPedido = async (req, res) => {
 
     const novoPedido = await pedidoService.createPedido(dadosPedido);
     
-    // Enviar email de confirmação do pedido criado
+    // Enviar email e SMS de confirmação do pedido criado
     try {
-      console.log('[PedidoController] Enviando email de confirmação do pedido...');
+      console.log('[PedidoController] Enviando notificações de confirmação do pedido...');
       const cliente = await clienteService.getCliente(clienteId);
       
-      if (cliente && cliente.email && cliente.nome) {
-        await emailService.enviarStatusPedido(
-          cliente.email,
-          cliente.nome,
-          statusInicial,
-          dadosPedido.servicos.map(s => s.nome).join(', '),
-          modeloTenis,
-          novoPedido.codigo
-        );
-        console.log('[PedidoController] Email de confirmação enviado com sucesso');
+      if (cliente && cliente.nome) {
+        // Enviar email
+        if (cliente.email) {
+          await emailService.enviarStatusPedido(
+            cliente.email,
+            cliente.nome,
+            statusInicial,
+            dadosPedido.servicos.map(s => s.nome).join(', '),
+            modeloTenis,
+            novoPedido.codigo,
+            novoPedido.fotos || []
+          );
+          console.log('[PedidoController] Email de confirmação enviado com sucesso');
+        }
+
+        // SMS é enviado apenas quando finalizado (não na criação)
+        // Economia: evita SMS desnecessários
       } else {
-        console.log('[PedidoController] Dados do cliente insuficientes para envio de email:', {
+        console.log('[PedidoController] Dados do cliente insuficientes para envio de notificações:', {
           clienteEncontrado: !!cliente,
           email: cliente ? !!cliente.email : false,
+          telefone: cliente ? !!cliente.telefone : false,
           nome: cliente ? !!cliente.nome : false
         });
       }
-    } catch (emailError) {
-      console.error('[PedidoController] Erro ao enviar email de confirmação:', emailError);
-      // Não falhar a operação por erro no email
+    } catch (notificationError) {
+      console.error('[PedidoController] Erro ao enviar notificações de confirmação:', notificationError);
+      // Não falhar a operação por erro nas notificações
     }
     
     res.status(201).json({
@@ -460,33 +468,50 @@ exports.patchPedido = async (req, res) => {
       camposAtualizados: Object.keys(updatesPermitidos)
     });
 
-    // Se o status foi alterado, enviar notificação por email
+    // Se o status foi alterado, enviar notificações (email e SMS)
     if (updatesPermitidos.status && updatesPermitidos.status !== pedidoAtual.status) {
       try {
-        console.log('[PedidoController] Enviando notificação por email para mudança de status...');
+        console.log('[PedidoController] Enviando notificações para mudança de status...');
         
         // Buscar dados do cliente
         const cliente = await clienteService.getCliente(pedidoAtualizado.clienteId);
-        if (cliente && cliente.email && cliente.nome) {
-          await emailService.enviarStatusPedido(
-            cliente.email,
-            cliente.nome,
-            updatesPermitidos.status,
-            pedidoAtualizado.descricaoServicos || pedidoAtualizado.servicos?.map(s => s.nome).join(', ') || 'Serviços diversos',
-            pedidoAtualizado.modeloTenis || 'Tênis',
-            pedidoAtualizado.codigo
-          );
-          console.log('[PedidoController] Notificação por email enviada com sucesso');
+        if (cliente && cliente.nome) {
+          const servicosTexto = pedidoAtualizado.descricaoServicos || pedidoAtualizado.servicos?.map(s => s.nome).join(', ') || 'Serviços diversos';
+          
+          // Enviar email
+          if (cliente.email) {
+            await emailService.enviarStatusPedido(
+              cliente.email,
+              cliente.nome,
+              updatesPermitidos.status,
+              servicosTexto,
+              pedidoAtualizado.modeloTenis || 'Tênis',
+              pedidoAtualizado.codigo,
+              pedidoAtualizado.fotos || []
+            );
+            console.log('[PedidoController] Email enviado com sucesso');
+          }
+
+          // Enviar SMS (apenas se status for finalizado - economia)
+          if (cliente.telefone) {
+            await emailService.enviarSMSStatus(
+              cliente.telefone,
+              cliente.nome,
+              updatesPermitidos.status,
+              pedidoAtualizado.codigo
+            );
+          }
         } else {
-          console.log('[PedidoController] Dados do cliente insuficientes para envio de email:', {
+          console.log('[PedidoController] Dados do cliente insuficientes para envio de notificações:', {
             clienteEncontrado: !!cliente,
             email: cliente ? !!cliente.email : false,
+            telefone: cliente ? !!cliente.telefone : false,
             nome: cliente ? !!cliente.nome : false
           });
         }
-      } catch (emailError) {
-        console.error('[PedidoController] Erro ao enviar email:', emailError);
-        // Não falhar a operação por erro no email
+      } catch (notificationError) {
+        console.error('[PedidoController] Erro ao enviar notificações:', notificationError);
+        // Não falhar a operação por erro nas notificações
       }
     }
 
@@ -574,36 +599,47 @@ exports.updatePedidoStatus = async (req, res) => {
     };
 
     const atualizado = await pedidoService.updatePedido(req.params.id, updates);
-    
-    if (!atualizado) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Pedido não encontrado' 
-      });
-    }
 
-    // Enviar notificação por email se os dados necessários estiverem disponíveis
+    // Enviar notificações (email e SMS) se os dados necessários estiverem disponíveis
     try {
       const cliente = await clienteService.getCliente(atualizado.clienteId);
-      if (cliente && cliente.email && cliente.nome) {
-        await emailService.enviarStatusPedido(
-          cliente.email,
-          cliente.nome,
-          status,
-          atualizado.descricaoServicos || atualizado.servicos?.map(s => s.nome).join(', ') || 'Serviços diversos',
-          atualizado.modeloTenis || 'Tênis',
-          atualizado.codigo
-        );
+      if (cliente && cliente.nome) {
+        const servicosTexto = atualizado.descricaoServicos || atualizado.servicos?.map(s => s.nome).join(', ') || 'Serviços diversos';
+        
+        // Enviar email
+        if (cliente.email) {
+          await emailService.enviarStatusPedido(
+            cliente.email,
+            cliente.nome,
+            status,
+            servicosTexto,
+            atualizado.modeloTenis || 'Tênis',
+            atualizado.codigo,
+            atualizado.fotos || []
+          );
+          console.log('[PedidoController] Email de atualização de status enviado com sucesso');
+        }
+
+        // Enviar SMS (apenas se status for finalizado - economia)
+        if (cliente.telefone) {
+          await emailService.enviarSMSStatus(
+            cliente.telefone,
+            cliente.nome,
+            status,
+            atualizado.codigo
+          );
+        }
       } else {
-        console.log('[PedidoController] Dados do cliente insuficientes para envio de email:', {
+        console.log('[PedidoController] Dados do cliente insuficientes para envio de notificações:', {
           clienteEncontrado: !!cliente,
           email: cliente ? !!cliente.email : false,
+          telefone: cliente ? !!cliente.telefone : false,
           nome: cliente ? !!cliente.nome : false
         });
       }
-    } catch (emailError) {
-      console.error('[PedidoController] Erro ao enviar email:', emailError);
-      // Não falha a requisição se o email der erro
+    } catch (notificationError) {
+      console.error('[PedidoController] Erro ao enviar notificações:', notificationError);
+      // Não falha a requisição se as notificações derem erro
     }
 
     res.status(200).json({
@@ -750,8 +786,8 @@ exports.listPedidoPdfs = async (req, res) => {
       });
     }
 
-    // Listar PDFs do pedido no S3
-    const prefix = `User/${pedido.clienteId}/pedidos/${pedidoId}/pdf/`;
+    // Listar PDFs do pedido no S3 (nova estrutura)
+    const prefix = `clientes/${pedido.clienteId}/pedidos/${pedidoId}/pdfs/`;
     const listParams = {
       Bucket: bucket,
       Prefix: prefix
@@ -960,51 +996,61 @@ exports.moverParaSetor = async (req, res) => {
       });
     }
 
-    console.log('[PedidoController] Movendo pedido para setor:', {
-      pedidoId,
-      setorId,
-      usuario: usuario.email,
-      funcionarioNome
-    });
-
+    // Mover pedido para o novo setor
     const pedidoAtualizado = await setorService.moverPedidoParaSetor(
-      pedidoId,
-      setorId,
-      usuario,
-      funcionarioNome,
+      pedidoId, 
+      setorId, 
+      usuario, 
+      funcionarioNome, 
       observacao
     );
 
-    // Enviar email notificando sobre a mudança de setor
+    // Enviar notificações (email e SMS) sobre a mudança de setor
     try {
-      console.log('[PedidoController] Enviando email de notificação de mudança de setor...');
+      console.log('[PedidoController] Enviando notificações de mudança de setor...');
       const cliente = await clienteService.getCliente(pedidoAtualizado.clienteId);
       
-      if (cliente && cliente.email && cliente.nome) {
+      if (cliente && cliente.nome) {
         // Buscar nome do setor
         const setores = setorService.listarSetores();
         const setor = setores.find(s => s.id === setorId);
         const nomeSetor = setor ? setor.nome : setorId;
+        const statusTexto = `Em produção - ${nomeSetor}`;
         
-        await emailService.enviarStatusPedido(
-          cliente.email,
-          cliente.nome,
-          `Em produção - ${nomeSetor}`,
-          pedidoAtualizado.servicos ? pedidoAtualizado.servicos.map(s => s.nome).join(', ') : 'Serviços diversos',
-          pedidoAtualizado.modeloTenis || 'Tênis',
-          pedidoAtualizado.codigo
-        );
-        console.log('[PedidoController] Email de mudança de setor enviado com sucesso');
+        // Enviar email
+        if (cliente.email) {
+          await emailService.enviarStatusPedido(
+            cliente.email,
+            cliente.nome,
+            statusTexto,
+            pedidoAtualizado.servicos ? pedidoAtualizado.servicos.map(s => s.nome).join(', ') : 'Serviços diversos',
+            pedidoAtualizado.modeloTenis || 'Tênis',
+            pedidoAtualizado.codigo,
+            pedidoAtualizado.fotos || []
+          );
+          console.log('[PedidoController] Email de mudança de setor enviado com sucesso');
+        }
+
+        // Enviar SMS (apenas se status for finalizado - economia)
+        if (cliente.telefone) {
+          await emailService.enviarSMSStatus(
+            cliente.telefone,
+            cliente.nome,
+            statusTexto,
+            pedidoAtualizado.codigo
+          );
+        }
       } else {
-        console.log('[PedidoController] Dados do cliente insuficientes para envio de email:', {
+        console.log('[PedidoController] Dados do cliente insuficientes para envio de notificações:', {
           clienteEncontrado: !!cliente,
           email: cliente ? !!cliente.email : false,
+          telefone: cliente ? !!cliente.telefone : false,
           nome: cliente ? !!cliente.nome : false
         });
       }
-    } catch (emailError) {
-      console.error('[PedidoController] Erro ao enviar email de mudança de setor:', emailError);
-      // Não falhar a operação por erro no email
+    } catch (notificationError) {
+      console.error('[PedidoController] Erro ao enviar notificações de mudança de setor:', notificationError);
+      // Não falhar a operação por erro nas notificações
     }
 
     res.status(200).json({

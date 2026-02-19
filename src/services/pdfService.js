@@ -18,7 +18,7 @@ class PdfService {
       }
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const key = `User/${clienteId}/pedidos/${pedidoId}/pdf/pedido-${pedidoId}-${timestamp}.pdf`;
+      const key = `clientes/${clienteId}/pedidos/${pedidoId}/pdfs/pedido-${pedidoId}-${timestamp}.pdf`;
       
       const params = {
         Bucket: bucket,

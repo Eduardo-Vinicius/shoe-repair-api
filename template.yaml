@@ -33,6 +33,8 @@ Resources:
           REFRESH_EXPIRES: !Ref RefreshExpires
           GMAIL_USER: primeastore8@gmail.com # Adiciona o e-mail do Gmail
           GMAIL_APP_PASSWORD: sgmfbtemfosgbjax # Adiciona a senha do aplicativo do Gmail
+          SMS_ENABLED: 'false' # Mude para 'true' para ativar SMS via AWS SNS
+          SMS_SENDER_ID: CasaDoTenis # Nome que aparece no SMS (nem todos países suportam)
   JWTSecret:
     Type: AWS::SSM::Parameter
     Properties:
@@ -111,6 +113,12 @@ Resources:
                 Action:
                   - ses:SendEmail
                   - ses:SendRawEmail
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                  - sns:SetSMSAttributes
+                  - sns:GetSMSAttributes
                 Resource: '*'
   ShoeRepairClientesTable:
     Type: AWS::DynamoDB::Table
