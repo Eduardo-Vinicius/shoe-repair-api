@@ -493,9 +493,9 @@ async function enviarStatusPedido(emailCliente, nomeCliente, status, descricaoSe
     timestamp: new Date().toISOString()
   });
 
-  // Validação das configurações
-  if (!FROM_EMAIL || FROM_EMAIL === 'noreply@yourdomain.com') {
-    console.warn('[Email] SES não configurado - variável SES_FROM_EMAIL não definida ou usando valor padrão');
+  // Validação das configurações GMAIL
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+    console.warn('[Email] Gmail não configurado - variáveis GMAIL_USER ou GMAIL_APP_PASSWORD não definidas');
     return;
   }
 
@@ -508,45 +508,31 @@ async function enviarStatusPedido(emailCliente, nomeCliente, status, descricaoSe
   try {
     const { subject, html, text } = gerarConteudoEmail(nomeCliente, status, descricaoServicos, modeloTenis, codigoPedido, fotos);
     
-    const params = {
-      Source: FROM_EMAIL,
-      Destination: {
-        ToAddresses: [emailCliente]
-      },
-      Message: {
-        Subject: {
-          Data: subject,
-          Charset: 'UTF-8'
-        },
-        Body: {
-          Html: {
-            Data: html,
-            Charset: 'UTF-8'
-          },
-          Text: {
-            Data: text,
-            Charset: 'UTF-8'
-          }
-        }
-      },
-      ReplyToAddresses: [REPLY_TO_EMAIL]
+    // Configuração do email usando Nodemailer (Gmail)
+    const mailOptions = {
+      from: `"Shoe Repair" <${process.env.GMAIL_USER}>`,
+      to: emailCliente,
+      subject: subject,
+      text: text,
+      html: html,
+      replyTo: process.env.GMAIL_USER
     };
 
-    console.log('[Email] Enviando email via SES...', {
+    console.log('[Email] 📧 Enviando email via Gmail...', {
       to: emailCliente,
       subject,
-      from: FROM_EMAIL
+      from: process.env.GMAIL_USER
     });
 
     const startTime = Date.now();
-    const result = await ses.sendEmail(params).promise();
+    const result = await transporter.sendMail(mailOptions);
     const duration = Date.now() - startTime;
 
-    console.log('[Email] ✅ Email enviado com sucesso!', {
+    console.log('[Email] ✅ Email enviado com sucesso via Gmail!', {
       emailCliente,
       nomeCliente,
       status,
-      messageId: result.MessageId,
+      messageId: result.messageId,
       duracaoMs: duration,
       timestamp: new Date().toISOString()
     });
