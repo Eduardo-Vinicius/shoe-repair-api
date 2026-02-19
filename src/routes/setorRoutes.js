@@ -10,7 +10,4 @@ router.use(authMiddleware);
 // GET /setores - Lista todos os setores disponíveis
 router.get('/', pedidoController.listarSetores);
 
-// GET /setores/estatisticas - Estatísticas de todos os setores
-router.get('/estatisticas', pedidoController.getEstatisticasSetores);
-
 module.exports = router;
