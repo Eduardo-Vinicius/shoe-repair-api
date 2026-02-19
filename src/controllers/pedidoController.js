@@ -249,7 +249,32 @@ exports.createPedido = async (req, res) => {
 
     const novoPedido = await pedidoService.createPedido(dadosPedido);
     
-   
+    // Enviar email de confirmação do pedido criado
+    try {
+      console.log('[PedidoController] Enviando email de confirmação do pedido...');
+      const cliente = await clienteService.getCliente(clienteId);
+      
+      if (cliente && cliente.email && cliente.nome) {
+        await emailService.enviarStatusPedido(
+          cliente.email,
+          cliente.nome,
+          statusInicial,
+          dadosPedido.servicos.map(s => s.nome).join(', '),
+          modeloTenis,
+          novoPedido.codigo
+        );
+        console.log('[PedidoController] Email de confirmação enviado com sucesso');
+      } else {
+        console.log('[PedidoController] Dados do cliente insuficientes para envio de email:', {
+          clienteEncontrado: !!cliente,
+          email: cliente ? !!cliente.email : false,
+          nome: cliente ? !!cliente.nome : false
+        });
+      }
+    } catch (emailError) {
+      console.error('[PedidoController] Erro ao enviar email de confirmação:', emailError);
+      // Não falhar a operação por erro no email
+    }
     
     res.status(201).json({
       success: true,
