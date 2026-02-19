@@ -197,11 +197,26 @@ const REPLY_TO_EMAIL = process.env.SES_REPLY_TO_EMAIL || FROM_EMAIL;
 // Função para enviar e-mail via Nodemailer (Gmail)
 // Mantém compatibilidade CommonJS (sem `export`)
 async function enviarEmail(to, subject, order, status) {
+  // Formatar serviços se for array de objetos
+  let servicosFormatados = 'Serviços';
+  if (order?.descricaoServicos) {
+    servicosFormatados = order.descricaoServicos;
+  } else if (Array.isArray(order?.servicos)) {
+    // Se servicos for array de objetos, converter para string formatada
+    servicosFormatados = order.servicos.map(s => s.nome || s).join(', ');
+  } else if (order?.servicos) {
+    servicosFormatados = order.servicos;
+  } else if (order?.serviceType) {
+    servicosFormatados = order.serviceType;
+  } else if (order?.description) {
+    servicosFormatados = order.description;
+  }
+
   // Reaproveita o gerador principal (retorna { subject, html, text })
   const conteudo = gerarConteudoEmail(
     order?.clientName || order?.nomeCliente || 'Cliente',
     status,
-    order?.descricaoServicos || order?.servicos || order?.serviceType || order?.description || 'Serviços',
+    servicosFormatados,
     order?.modeloTenis || order?.sneaker || order?.modelo || 'Tênis',
     order?.codigo || order?.id || 'N/A'
   );

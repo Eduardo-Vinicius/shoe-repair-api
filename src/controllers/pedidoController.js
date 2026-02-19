@@ -975,6 +975,38 @@ exports.moverParaSetor = async (req, res) => {
       observacao
     );
 
+    // Enviar email notificando sobre a mudança de setor
+    try {
+      console.log('[PedidoController] Enviando email de notificação de mudança de setor...');
+      const cliente = await clienteService.getCliente(pedidoAtualizado.clienteId);
+      
+      if (cliente && cliente.email && cliente.nome) {
+        // Buscar nome do setor
+        const setores = setorService.listarSetores();
+        const setor = setores.find(s => s.id === setorId);
+        const nomeSetor = setor ? setor.nome : setorId;
+        
+        await emailService.enviarStatusPedido(
+          cliente.email,
+          cliente.nome,
+          `Em produção - ${nomeSetor}`,
+          pedidoAtualizado.servicos ? pedidoAtualizado.servicos.map(s => s.nome).join(', ') : 'Serviços diversos',
+          pedidoAtualizado.modeloTenis || 'Tênis',
+          pedidoAtualizado.codigo
+        );
+        console.log('[PedidoController] Email de mudança de setor enviado com sucesso');
+      } else {
+        console.log('[PedidoController] Dados do cliente insuficientes para envio de email:', {
+          clienteEncontrado: !!cliente,
+          email: cliente ? !!cliente.email : false,
+          nome: cliente ? !!cliente.nome : false
+        });
+      }
+    } catch (emailError) {
+      console.error('[PedidoController] Erro ao enviar email de mudança de setor:', emailError);
+      // Não falhar a operação por erro no email
+    }
+
     res.status(200).json({
       success: true,
       message: 'Pedido movido para o setor com sucesso',
