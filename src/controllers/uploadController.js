@@ -66,6 +66,11 @@ exports.uploadFotos = async (req, res) => {
     // Atualiza o pedido no DynamoDB com as URLs das imagens
     await pedidoService.updatePedido(pedidoId, { fotos: uploadedUrls });
 
+    console.log('[UploadController] ✅ Pedido atualizado com URLs das fotos:', {
+      pedidoId,
+      urls: uploadedUrls
+    });
+
     res.status(200).json({ 
       success: true,
       urls: uploadedUrls,

@@ -10,16 +10,29 @@ const setorService = require('../services/setorService');
  */
 async function enviarNotificacoesPedido(pedido, status = null) {
   try {
+    console.log('[Notificações] 🔔 Iniciando envio de notificações:', {
+      pedidoId: pedido.id,
+      codigo: pedido.codigo,
+      status: status || pedido.status,
+      clienteId: pedido.clienteId
+    });
+
     if (!pedido.clienteId) {
-      console.log('[Notificações] ClienteId não encontrado no pedido');
+      console.log('[Notificações] ❌ ClienteId não encontrado no pedido');
       return;
     }
 
     const cliente = await clienteService.getCliente(pedido.clienteId);
     if (!cliente) {
-      console.log('[Notificações] Cliente não encontrado:', pedido.clienteId);
+      console.log('[Notificações] ❌ Cliente não encontrado:', pedido.clienteId);
       return;
     }
+
+    console.log('[Notificações] Cliente encontrado:', {
+      nome: cliente.nome,
+      email: cliente.email,
+      telefone: cliente.telefone
+    });
 
     const statusFinal = status || pedido.status;
     const servicosTexto = pedido.descricaoServicos || 
@@ -28,8 +41,17 @@ async function enviarNotificacoesPedido(pedido, status = null) {
     const codigo = pedido.codigo || 'N/A';
     const fotos = pedido.fotos || [];
 
+    console.log('[Notificações] Dados para envio:', {
+      statusFinal,
+      servicosTexto,
+      modeloTenis,
+      codigo,
+      quantidadeFotos: fotos.length
+    });
+
     // Enviar email se o cliente tiver email
     if (cliente.email) {
+      console.log('[Notificações] 📧 Enviando email para:', cliente.email);
       await emailService.enviarStatusPedido(
         cliente.email,
         cliente.nome || 'Cliente',
@@ -47,6 +69,7 @@ async function enviarNotificacoesPedido(pedido, status = null) {
     // SMS é enviado automaticamente pelo emailService quando aplicável
     // (apenas para status finalizados - economia)
     if (cliente.telefone) {
+      console.log('[Notificações] 📱 Enviando SMS para:', cliente.telefone);
       await emailService.enviarSMSStatus(
         cliente.telefone,
         cliente.nome || 'Cliente',
@@ -55,7 +78,11 @@ async function enviarNotificacoesPedido(pedido, status = null) {
       );
     }
   } catch (error) {
-    console.error('[Notificações] ❌ Erro ao enviar notificações:', error.message);
+    console.error('[Notificações] ❌ ERRO ao enviar notificações:', {
+      message: error.message,
+      stack: error.stack,
+      pedidoId: pedido.id
+    });
     // Não propaga o erro para não quebrar a operação principal
   }
 }
