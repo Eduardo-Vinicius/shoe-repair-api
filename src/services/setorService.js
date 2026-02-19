@@ -163,6 +163,7 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
     setoresHistorico,
     status: statusLegivel,
     departamento: setor.nome,
+    funcionarioAtual: funcionarioNome || usuario.name || usuario.email,
     updatedAt: agora,
     updatedBy: usuario.email
   };

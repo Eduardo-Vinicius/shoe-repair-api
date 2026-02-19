@@ -141,6 +141,7 @@ exports.listPedidosStatus = async (req, res) => {
       setorAtual: pedido.setorAtual || null,
       departamento: pedido.departamento || '',
       setoresHistorico: pedido.setoresHistorico || [],
+      funcionarioAtual: pedido.funcionarioAtual || '',
       updatedBy: pedido.updatedBy || ''
     }));
 
@@ -291,6 +292,7 @@ exports.createPedido = async (req, res) => {
       // Sistema de setores: inicia em Atendimento e gera fluxo automaticamente
       setoresFluxo: [],
       setorAtual: null,
+      funcionarioAtual: userName || userEmail || 'Sistema',
       setoresHistorico: [],
       statusHistory: [
         {
