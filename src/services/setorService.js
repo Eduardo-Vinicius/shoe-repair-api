@@ -109,6 +109,18 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
   if (!pedido) {
     throw new Error('Pedido não encontrado');
   }
+
+  if (pedido.setorAtual === novoSetorId) {
+    console.log('[SetorService] Pedido já está no setor de destino. Ignorando movimentação repetida:', {
+      pedidoId,
+      setorId: novoSetorId
+    });
+
+    return {
+      ...pedido,
+      _noMovement: true
+    };
+  }
   
   // Validar se setor está no fluxo do pedido
   if (!pedido.setoresFluxo || !pedido.setoresFluxo.includes(novoSetorId)) {

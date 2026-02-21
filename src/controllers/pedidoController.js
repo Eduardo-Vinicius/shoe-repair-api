@@ -5,7 +5,7 @@ const pdfService = require('../services/pdfService');
 const setorService = require('../services/setorService');
 const AWS = require('aws-sdk');
 const archiver = require('archiver');
-const { ORDER_STATUS, normalizeStatus } = require('../utils/orderStatus');
+const { ORDER_STATUS, normalizeStatus, slugifyStatus } = require('../utils/orderStatus');
 
 const s3 = new AWS.S3();
 const PRESIGNED_URL_EXPIRES_SECONDS = Number(process.env.S3_PRESIGNED_EXPIRES_SECONDS || 3600);
@@ -30,6 +30,40 @@ function validarENormalizarStatus(status, obrigatorio = false) {
   } catch (error) {
     return { ok: false, error: error.message };
   }
+}
+
+function resolverSetorIdPorStatus(status) {
+  if (!status) return null;
+
+  const statusNormalizado = normalizeStatus(status, {
+    strict: false,
+    fallback: String(status || '')
+  });
+
+  const statusSlug = slugifyStatus(statusNormalizado);
+
+  if (
+    statusSlug.startsWith(slugifyStatus(ORDER_STATUS.ATENDIMENTO_RECEBIDO)) ||
+    statusSlug.startsWith(slugifyStatus(ORDER_STATUS.ATENDIMENTO_ORCADO)) ||
+    statusSlug.startsWith(slugifyStatus(ORDER_STATUS.ATENDIMENTO_APROVADO))
+  ) {
+    return 'atendimento-inicial';
+  }
+
+  if (
+    statusSlug.startsWith(slugifyStatus(ORDER_STATUS.ATENDIMENTO_FINALIZADO)) ||
+    statusSlug.startsWith(slugifyStatus(ORDER_STATUS.ATENDIMENTO_ENTREGUE))
+  ) {
+    return 'atendimento-final';
+  }
+
+  const setores = setorService.listarSetores();
+  const setorEncontrado = setores.find(setor => {
+    const setorSlug = slugifyStatus(setor.nome);
+    return statusSlug.startsWith(setorSlug);
+  });
+
+  return setorEncontrado ? setorEncontrado.id : null;
 }
 
 function extrairS3KeyDaFoto(foto, bucket) {
@@ -725,6 +759,61 @@ exports.updatePedidoStatus = async (req, res) => {
       });
     }
 
+    const statusAtualNormalizado = normalizeStatus(pedidoAtual.status, {
+      strict: false,
+      fallback: pedidoAtual.status
+    });
+
+    if (statusAtualNormalizado === novoStatus) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          id: pedidoAtual.id,
+          status: pedidoAtual.status,
+          statusHistory: pedidoAtual.statusHistory || [],
+          updatedAt: pedidoAtual.updatedAt,
+          fotos: (assinarFotosPedido(pedidoAtual).fotos || [])
+        },
+        message: 'Status já está atualizado'
+      });
+    }
+
+    const setorIdResolvido = resolverSetorIdPorStatus(novoStatus);
+    if (setorIdResolvido) {
+      const usuario = {
+        sub: userId,
+        email: userEmail,
+        name: req.user?.name || userEmail,
+        role
+      };
+
+      const pedidoMovido = await setorService.moverPedidoParaSetor(
+        req.params.id,
+        setorIdResolvido,
+        usuario,
+        req.body?.funcionarioNome,
+        req.body?.observacao
+      );
+
+      if (!pedidoMovido?._noMovement) {
+        await enviarNotificacoesPedido(pedidoMovido, pedidoMovido.status || novoStatus);
+      }
+
+      const pedidoResposta = assinarFotosPedido(pedidoMovido);
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          id: pedidoResposta.id,
+          status: pedidoResposta.status,
+          statusHistory: pedidoResposta.statusHistory,
+          updatedAt: pedidoResposta.updatedAt,
+          fotos: pedidoResposta.fotos || []
+        },
+        message: pedidoMovido?._noMovement ? 'Status já está atualizado' : 'Status atualizado com sucesso'
+      });
+    }
+
     // Criar novo item do histórico
     const novoHistorico = {
       status: novoStatus,
@@ -1090,7 +1179,7 @@ exports.listarSetores = async (req, res) => {
 exports.moverParaSetor = async (req, res) => {
   try {
     const pedidoId = req.params.id;
-    const { setorId, funcionarioNome, observacao } = req.body;
+    const { setorId, status, funcionarioNome, observacao } = req.body;
     const usuario = {
       sub: req.user?.sub,
       email: req.user?.email,
@@ -1098,33 +1187,43 @@ exports.moverParaSetor = async (req, res) => {
       role: req.user?.role
     };
 
-    if (!setorId) {
+    const setorIdResolvido = setorId || resolverSetorIdPorStatus(status);
+
+    if (!setorIdResolvido) {
       return res.status(400).json({
         success: false,
-        error: 'setorId é obrigatório'
+        error: 'setorId ou status válido é obrigatório'
       });
     }
 
     // Mover pedido para o novo setor
     const pedidoAtualizado = await setorService.moverPedidoParaSetor(
       pedidoId, 
-      setorId, 
+      setorIdResolvido, 
       usuario, 
       funcionarioNome, 
       observacao
     );
 
+    if (pedidoAtualizado?._noMovement) {
+      return res.status(200).json({
+        success: true,
+        message: 'Pedido já está no setor informado',
+        data: assinarFotosPedido(pedidoAtualizado)
+      });
+    }
+
     // Enviar notificações sobre mudança de setor
     const setores = setorService.listarSetores();
-    const setor = setores.find(s => s.id === setorId);
-    const nomeSetor = setor ? setor.nome : setorId;
+    const setor = setores.find(s => s.id === setorIdResolvido);
+    const nomeSetor = setor ? setor.nome : setorIdResolvido;
     const statusTexto = pedidoAtualizado?.status || `Em produção - ${nomeSetor}`;
     await enviarNotificacoesPedido(pedidoAtualizado, statusTexto);
 
     res.status(200).json({
       success: true,
       message: 'Pedido movido para o setor com sucesso',
-      data: pedidoAtualizado
+      data: assinarFotosPedido(pedidoAtualizado)
     });
 
   } catch (error) {
