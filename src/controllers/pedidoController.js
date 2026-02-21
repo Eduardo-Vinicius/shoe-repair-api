@@ -3,6 +3,72 @@ const clienteService = require('../services/clienteService');
 const emailService = require('../services/emailService');
 const pdfService = require('../services/pdfService');
 const setorService = require('../services/setorService');
+const AWS = require('aws-sdk');
+const archiver = require('archiver');
+
+const s3 = new AWS.S3();
+const PRESIGNED_URL_EXPIRES_SECONDS = Number(process.env.S3_PRESIGNED_EXPIRES_SECONDS || 3600);
+
+function extrairS3KeyDaFoto(foto, bucket) {
+  if (!foto || typeof foto !== 'string') return null;
+
+  if (!foto.startsWith('http')) {
+    return foto.replace(/^\/+/, '');
+  }
+
+  try {
+    const url = new URL(foto);
+    const pathname = decodeURIComponent(url.pathname || '');
+    const pathLimpo = pathname.replace(/^\/+/, '');
+    const host = (url.hostname || '').toLowerCase();
+    const bucketLower = (bucket || '').toLowerCase();
+
+    if (bucketLower && host.startsWith(`${bucketLower}.s3`)) {
+      return pathLimpo;
+    }
+
+    if (bucketLower && host === 's3.amazonaws.com' && pathLimpo.startsWith(`${bucket}/`)) {
+      return pathLimpo.slice(bucket.length + 1);
+    }
+
+    return pathLimpo;
+  } catch (_error) {
+    return foto;
+  }
+}
+
+function gerarUrlPresignedFoto(foto) {
+  const bucket = process.env.S3_BUCKET_NAME;
+  if (!bucket) return foto;
+
+  const key = extrairS3KeyDaFoto(foto, bucket);
+  if (!key) return foto;
+
+  return s3.getSignedUrl('getObject', {
+    Bucket: bucket,
+    Key: key,
+    Expires: PRESIGNED_URL_EXPIRES_SECONDS
+  });
+}
+
+function extensaoPorContentType(contentType = '') {
+  const ct = String(contentType).toLowerCase();
+  if (ct.includes('png')) return '.png';
+  if (ct.includes('jpeg') || ct.includes('jpg')) return '.jpg';
+  if (ct.includes('webp')) return '.webp';
+  return '.bin';
+}
+
+function assinarFotosPedido(pedido) {
+  if (!pedido || !Array.isArray(pedido.fotos) || pedido.fotos.length === 0) {
+    return pedido;
+  }
+
+  return {
+    ...pedido,
+    fotos: pedido.fotos.map(gerarUrlPresignedFoto)
+  };
+}
 
 /**
  * Função auxiliar para enviar notificações de pedido
@@ -96,7 +162,7 @@ exports.listPedidosStatus = async (req, res) => {
     // Filtragem removida para permitir acesso completo
 
     // Transformar pedidos para o formato esperado pelo frontend
-    const pedidosFormatados = pedidos.map(pedido => ({
+    const pedidosFormatados = pedidos.map(pedido => assinarFotosPedido({
       id: pedido.id,
       codigo: pedido.codigo, // Código sequencial legível
       clientName: pedido.nomeCliente || pedido.clientName,
@@ -171,7 +237,7 @@ exports.listPedidos = async (req, res) => {
   try {
     let pedidos = await pedidoService.listPedidos();
     // Sempre retorna 200, nunca 304
-    res.status(200).json(pedidos);
+    res.status(200).json(pedidos.map(assinarFotosPedido));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -181,7 +247,7 @@ exports.getPedido = async (req, res) => {
   try {
     const pedido = await pedidoService.getPedido(req.params.id);
     if (!pedido) return res.status(404).json({ error: 'Pedido não encontrado' });
-    res.status(200).json(pedido);
+    res.status(200).json(assinarFotosPedido(pedido));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -339,7 +405,7 @@ exports.createPedido = async (req, res) => {
     
     res.status(201).json({
       success: true,
-      data: novoPedido,
+      data: assinarFotosPedido(novoPedido),
       message: 'Pedido criado com sucesso'
     });
   } catch (err) {
@@ -354,7 +420,7 @@ exports.updatePedido = async (req, res) => {
   try {
     const atualizado = await pedidoService.updatePedido(req.params.id, req.body);
     if (!atualizado) return res.status(404).json({ error: 'Pedido não encontrado' });
-    res.status(200).json(atualizado);
+    res.status(200).json(assinarFotosPedido(atualizado));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -528,7 +594,7 @@ exports.patchPedido = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: pedidoAtualizado,
+      data: assinarFotosPedido(pedidoAtualizado),
       message: `Pedido atualizado com sucesso. Campos alterados: ${Object.keys(updatesPermitidos).filter(k => k !== 'updatedAt').join(', ')}`
     });
 
@@ -620,7 +686,8 @@ exports.updatePedidoStatus = async (req, res) => {
         id: atualizado.id,
         status: atualizado.status,
         statusHistory: atualizado.statusHistory,
-        updatedAt: atualizado.updatedAt
+        updatedAt: atualizado.updatedAt,
+        fotos: (assinarFotosPedido(atualizado).fotos || [])
       },
       message: 'Status atualizado com sucesso'
     });
@@ -771,7 +838,7 @@ exports.listPedidoPdfs = async (req, res) => {
       key: obj.Key,
       lastModified: obj.LastModified,
       size: obj.Size,
-      url: `https://${bucket}.s3.amazonaws.com/${obj.Key}`,
+      url: gerarUrlPresignedFoto(obj.Key),
       filename: obj.Key.split('/').pop()
     }));
 
@@ -1026,6 +1093,108 @@ exports.getProximoSetor = async (req, res) => {
     console.error('[PedidoController] Erro ao buscar próximo setor:', error);
     res.status(500).json({
       success: false,
+      error: error.message
+    });
+  }
+};
+
+// GET /pedidos/:id/fotos/zip - Baixar todas as fotos do pedido em um arquivo ZIP
+exports.downloadPedidoFotosZip = async (req, res) => {
+  try {
+    const { id: pedidoId } = req.params;
+
+    if (!pedidoId) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID do pedido é obrigatório'
+      });
+    }
+
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Usuário não autenticado'
+      });
+    }
+
+    const pedido = await pedidoService.getPedido(pedidoId);
+    if (!pedido) {
+      return res.status(404).json({
+        success: false,
+        message: 'Pedido não encontrado'
+      });
+    }
+
+    if (!Array.isArray(pedido.fotos) || pedido.fotos.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Pedido não possui fotos para download'
+      });
+    }
+
+    const bucket = process.env.S3_BUCKET_NAME;
+    if (!bucket) {
+      return res.status(500).json({
+        success: false,
+        message: 'Bucket S3 não configurado'
+      });
+    }
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="pedido-${pedidoId}-fotos.zip"`);
+
+    const zip = archiver('zip', { zlib: { level: 9 } });
+
+    zip.on('error', (error) => {
+      console.error('[PedidoController] Erro ao gerar ZIP de fotos:', error);
+      if (!res.headersSent) {
+        res.status(500).json({
+          success: false,
+          message: 'Erro ao gerar ZIP de fotos',
+          error: error.message
+        });
+      } else {
+        res.end();
+      }
+    });
+
+    zip.pipe(res);
+
+    let adicionadas = 0;
+
+    for (let index = 0; index < pedido.fotos.length; index++) {
+      try {
+        const foto = pedido.fotos[index];
+        const key = extrairS3KeyDaFoto(foto, bucket);
+        if (!key) continue;
+
+        const arquivo = await s3.getObject({
+          Bucket: bucket,
+          Key: key
+        }).promise();
+
+        const nomeOriginal = key.split('/').pop() || '';
+        const extensaoOriginal = nomeOriginal.includes('.') ? nomeOriginal.slice(nomeOriginal.lastIndexOf('.')) : '';
+        const extensao = extensaoOriginal || extensaoPorContentType(arquivo.ContentType);
+        const nomeArquivo = `foto-${index + 1}${extensao}`;
+
+        zip.append(arquivo.Body, { name: nomeArquivo });
+        adicionadas += 1;
+      } catch (errorFoto) {
+        console.warn(`[PedidoController] Falha ao adicionar foto ${index + 1} no ZIP:`, errorFoto.message);
+      }
+    }
+
+    if (adicionadas === 0) {
+      zip.append(Buffer.from('Nenhuma foto pôde ser adicionada ao ZIP.'), { name: 'LEIA-ME.txt' });
+    }
+
+    zip.finalize();
+  } catch (error) {
+    console.error('[PedidoController] Erro ao baixar fotos em ZIP:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno do servidor ao baixar fotos',
       error: error.message
     });
   }

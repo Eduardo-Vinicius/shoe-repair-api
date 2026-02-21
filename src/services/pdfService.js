@@ -6,8 +6,73 @@ const StringSanitizer = require('../utils/stringSanitizer');
 
 // Configurar S3
 const s3 = new AWS.S3();
+const MAX_FOTOS_PDF = Number(process.env.PDF_MAX_EMBEDDED_FOTOS || 6);
+
+function extrairS3KeyDaFoto(foto, bucket) {
+  if (!foto || typeof foto !== 'string') return null;
+
+  if (!foto.startsWith('http')) {
+    return foto.replace(/^\/+/, '');
+  }
+
+  try {
+    const url = new URL(foto);
+    const pathname = decodeURIComponent(url.pathname || '');
+    const pathLimpo = pathname.replace(/^\/+/, '');
+    const host = (url.hostname || '').toLowerCase();
+    const bucketLower = (bucket || '').toLowerCase();
+
+    if (bucketLower && host.startsWith(`${bucketLower}.s3`)) {
+      return pathLimpo;
+    }
+
+    if (bucketLower && host === 's3.amazonaws.com' && pathLimpo.startsWith(`${bucket}/`)) {
+      return pathLimpo.slice(bucket.length + 1);
+    }
+
+    return pathLimpo;
+  } catch (_error) {
+    return null;
+  }
+}
 
 class PdfService {
+  getFormatoImagem(contentType = '', key = '') {
+    const contentTypeLower = String(contentType || '').toLowerCase();
+    const keyLower = String(key || '').toLowerCase();
+
+    if (contentTypeLower.includes('png') || keyLower.endsWith('.png')) {
+      return 'PNG';
+    }
+
+    if (contentTypeLower.includes('jpeg') || contentTypeLower.includes('jpg') || keyLower.endsWith('.jpg') || keyLower.endsWith('.jpeg')) {
+      return 'JPEG';
+    }
+
+    return null;
+  }
+
+  async carregarFotoParaPdf(foto) {
+    const bucket = process.env.S3_BUCKET_NAME;
+    if (!bucket) return null;
+
+    const key = extrairS3KeyDaFoto(foto, bucket);
+    if (!key) return null;
+
+    const result = await s3.getObject({
+      Bucket: bucket,
+      Key: key
+    }).promise();
+
+    const formato = this.getFormatoImagem(result.ContentType, key);
+    if (!formato) return null;
+
+    const base64 = result.Body.toString('base64');
+    return {
+      formato,
+      dataUrl: `data:${result.ContentType || (formato === 'PNG' ? 'image/png' : 'image/jpeg')};base64,${base64}`
+    };
+  }
   
   // Função para fazer upload do PDF para S3
   async uploadPdfToS3(pdfBuffer, pedidoId, clienteId) {
@@ -356,6 +421,60 @@ class PdfService {
       } catch (alignError) {
         const textWidth = doc.getTextWidth(footerText);
         doc.text(footerText, pageWidth - 20 - textWidth, pageHeight - 20);
+      }
+
+      const fotosPedido = Array.isArray(pedido.fotos) ? pedido.fotos.slice(0, MAX_FOTOS_PDF) : [];
+      if (fotosPedido.length > 0) {
+        doc.addPage();
+        let fotoY = 20;
+        let totalRenderizadas = 0;
+
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(44, 90, 160);
+        doc.text('Fotos do Pedido', 20, fotoY);
+        fotoY += 12;
+
+        for (let index = 0; index < fotosPedido.length; index++) {
+          try {
+            const fotoCarregada = await this.carregarFotoParaPdf(fotosPedido[index]);
+            if (!fotoCarregada) {
+              continue;
+            }
+
+            const props = doc.getImageProperties(fotoCarregada.dataUrl);
+            const maxWidth = pageWidth - 40;
+            const maxHeight = 75;
+            const escala = Math.min(maxWidth / props.width, maxHeight / props.height);
+            const width = props.width * escala;
+            const height = props.height * escala;
+
+            if (fotoY + height + 12 > pageHeight - 20) {
+              doc.addPage();
+              fotoY = 20;
+            }
+
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(0, 0, 0);
+            doc.text(`Foto ${index + 1}`, 20, fotoY);
+            fotoY += 4;
+
+            const posX = (pageWidth - width) / 2;
+            doc.addImage(fotoCarregada.dataUrl, fotoCarregada.formato, posX, fotoY, width, height);
+            fotoY += height + 10;
+            totalRenderizadas += 1;
+          } catch (fotoError) {
+            console.warn(`[PdfService] Falha ao inserir foto ${index + 1} no PDF:`, fotoError.message);
+          }
+        }
+
+        if (totalRenderizadas === 0) {
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(80, 80, 80);
+          doc.text('Nenhuma foto disponível para exibição no PDF.', 20, fotoY);
+        }
       }
 
       // Retornar buffer do PDF

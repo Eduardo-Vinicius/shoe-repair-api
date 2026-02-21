@@ -19,6 +19,7 @@ router.patch('/:id/status', pedidoController.updatePedidoStatus);
 // Rotas de PDF
 router.post('/document/pdf', pedidoController.generatePedidoPdf);
 router.get('/:id/pdfs', pedidoController.listPedidoPdfs);
+router.get('/:id/fotos/zip', pedidoController.downloadPedidoFotosZip);
 
 // Rotas de WhatsApp (legado - mantido para compatibilidade)
 router.post('/:id/enviar-pdf-whatsapp', pedidoController.enviarPdfWhatsApp);

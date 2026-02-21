@@ -1,6 +1,50 @@
 const AWS = require('aws-sdk');
 const s3 = new AWS.S3();
 
+const PRESIGNED_URL_EXPIRES_SECONDS = Number(process.env.S3_PRESIGNED_EXPIRES_SECONDS || 3600);
+
+function extrairS3KeyDaFoto(foto, bucket) {
+  if (!foto || typeof foto !== 'string') return null;
+
+  if (!foto.startsWith('http')) {
+    return foto.replace(/^\/+/, '');
+  }
+
+  try {
+    const url = new URL(foto);
+    const pathname = decodeURIComponent(url.pathname || '');
+    const pathLimpo = pathname.replace(/^\/+/, '');
+    const host = (url.hostname || '').toLowerCase();
+    const bucketLower = (bucket || '').toLowerCase();
+
+    if (bucketLower && host.startsWith(`${bucketLower}.s3`)) {
+      return pathLimpo;
+    }
+
+    if (bucketLower && host === 's3.amazonaws.com' && pathLimpo.startsWith(`${bucket}/`)) {
+      return pathLimpo.slice(bucket.length + 1);
+    }
+
+    return pathLimpo;
+  } catch (_error) {
+    return foto;
+  }
+}
+
+function gerarUrlPresignedFoto(foto) {
+  const bucket = process.env.S3_BUCKET_NAME;
+  if (!bucket) return foto;
+
+  const key = extrairS3KeyDaFoto(foto, bucket);
+  if (!key) return foto;
+
+  return s3.getSignedUrl('getObject', {
+    Bucket: bucket,
+    Key: key,
+    Expires: PRESIGNED_URL_EXPIRES_SECONDS
+  });
+}
+
 exports.uploadFotos = async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
@@ -71,9 +115,11 @@ exports.uploadFotos = async (req, res) => {
       urls: uploadedUrls
     });
 
+    const presignedUrls = uploadedUrls.map(gerarUrlPresignedFoto);
+
     res.status(200).json({ 
       success: true,
-      urls: uploadedUrls,
+      urls: presignedUrls,
       message: `${uploadedUrls.length} foto(s) salva(s) com sucesso`
     });
 
