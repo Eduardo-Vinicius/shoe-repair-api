@@ -1,5 +1,6 @@
 const axios = require('axios');
 const pdfService = require('./pdfService');
+const { ORDER_STATUS, normalizeStatus, isFinalStatus } = require('../utils/orderStatus');
 
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN; // Token do Meta WhatsApp Cloud API
 const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID; // ID do número do WhatsApp Business
@@ -20,10 +21,11 @@ function gerarTemplateStatusPedido(nomeCliente, status, descricaoServicos, model
     modeloTenis
   });
 
-  const statusLower = status.toLowerCase();
+  const statusNormalizado = normalizeStatus(status, { strict: false, fallback: String(status || '') });
+  const statusLower = String(statusNormalizado || status || '').toLowerCase();
   console.log('[WhatsApp] Status normalizado:', statusLower);
 
-  if (statusLower === 'criado' || statusLower === 'created') {
+  if (statusLower === 'criado' || statusLower === 'created' || statusNormalizado === ORDER_STATUS.ATENDIMENTO_RECEBIDO) {
     console.log('[WhatsApp] Tipo de template: order_created');
     return {
       type: "template",
@@ -55,7 +57,7 @@ function gerarTemplateStatusPedido(nomeCliente, status, descricaoServicos, model
     };
   }
 
-  if (statusLower === 'concluido' || statusLower === 'finalizado' || statusLower.includes('finalizado')) {
+  if (isFinalStatus(statusNormalizado)) {
     console.log('[WhatsApp] Tipo de template: order_status_update_finish');
     return {
       type: "template",

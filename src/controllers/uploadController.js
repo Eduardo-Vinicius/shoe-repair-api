@@ -16,18 +16,26 @@ function extrairS3KeyDaFoto(foto, bucket) {
     const pathLimpo = pathname.replace(/^\/+/, '');
     const host = (url.hostname || '').toLowerCase();
     const bucketLower = (bucket || '').toLowerCase();
+    const isS3Host = host === 's3.amazonaws.com' || /^s3[.-].*\.amazonaws\.com$/.test(host);
 
     if (bucketLower && host.startsWith(`${bucketLower}.s3`)) {
       return pathLimpo;
     }
 
-    if (bucketLower && host === 's3.amazonaws.com' && pathLimpo.startsWith(`${bucket}/`)) {
-      return pathLimpo.slice(bucket.length + 1);
+    if (bucketLower && host === bucketLower) {
+      return pathLimpo;
     }
 
-    return pathLimpo;
+    if (bucketLower && isS3Host) {
+      if (pathLimpo.startsWith(`${bucket}/`)) {
+        return pathLimpo.slice(bucket.length + 1);
+      }
+      return null;
+    }
+
+    return null;
   } catch (_error) {
-    return foto;
+    return null;
   }
 }
 

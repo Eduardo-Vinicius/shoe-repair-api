@@ -2,49 +2,35 @@ const AWS = require('aws-sdk');
 const clienteService = require('./clienteService');
 const pedidoService = require('./pedidoService');
 const userService = require('./userService');
+const { ORDER_STATUS, normalizeStatus, isFinalStatus } = require('../utils/orderStatus');
 
 const dynamoDb = new AWS.DynamoDB.DocumentClient({ region: process.env.AWS_REGION });
 
 // Função para contar pedidos por status
 exports.countPedidosByStatus = async (status) => {
   const tableName = process.env.DYNAMODB_PEDIDO_TABLE || 'shoeRepairPedidos';
-  const params = {
-    TableName: tableName,
-    FilterExpression: '#status = :status',
-    ExpressionAttributeNames: {
-      '#status': 'status'
-    },
-    ExpressionAttributeValues: {
-      ':status': status
-    },
-    Select: 'COUNT'
-  };
-  
+  const params = { TableName: tableName };
   const data = await dynamoDb.scan(params).promise();
-  return data.Count;
+
+  const statusAlvo = normalizeStatus(status, { strict: false, fallback: status });
+  return (data.Items || []).filter((pedido) => {
+    const statusPedido = normalizeStatus(pedido.status, { strict: false, fallback: pedido.status });
+    return statusPedido === statusAlvo;
+  }).length;
 };
 
 // Função para contar pedidos finalizados hoje
 exports.countCompletedOrdersToday = async () => {
   const tableName = process.env.DYNAMODB_PEDIDO_TABLE || 'shoeRepairPedidos';
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-  
-  const params = {
-    TableName: tableName,
-    FilterExpression: '#status = :status AND begins_with(#updatedAt, :today)',
-    ExpressionAttributeNames: {
-      '#status': 'status',
-      '#updatedAt': 'updatedAt'
-    },
-    ExpressionAttributeValues: {
-      ':status': 'finalizado',
-      ':today': today
-    },
-    Select: 'COUNT'
-  };
-  
+
+  const params = { TableName: tableName };
   const data = await dynamoDb.scan(params).promise();
-  return data.Count;
+
+  return (data.Items || []).filter((pedido) => {
+    const updatedAt = String(pedido.updatedAt || '');
+    return isFinalStatus(pedido.status) && updatedAt.startsWith(today);
+  }).length;
 };
 
 // Função para buscar pedidos recentes (últimos 10)
@@ -91,12 +77,25 @@ exports.getDashboardStats = async () => {
     const totalClients = clientes.length;
 
     // Contar pedidos ativos (em processamento)
-    const activeOrders = await this.countPedidosByStatus('em-processamento');
+    const activeStatuses = [
+      ORDER_STATUS.LAVAGEM_EM_ANDAMENTO,
+      ORDER_STATUS.PINTURA_EM_ANDAMENTO,
+      ORDER_STATUS.ACABAMENTO_EM_ANDAMENTO,
+      ORDER_STATUS.COSTURA_EM_ANDAMENTO,
+      ORDER_STATUS.SAPATARIA_EM_ANDAMENTO,
+      ORDER_STATUS.ATENDIMENTO_APROVADO
+    ];
+
+    const activeOrders = (await Promise.all(activeStatuses.map((status) => this.countPedidosByStatus(status))))
+      .reduce((acc, count) => acc + count, 0);
 
     // Contar pedidos pendentes (iniciado, aguardando aprovação, etc.)
-    const pedidosPendentes1 = await this.countPedidosByStatus('iniciado');
-    const pedidosPendentes2 = await this.countPedidosByStatus('Atendimento - Aguardando Aprovação');
-    const pendingOrders = pedidosPendentes1 + pedidosPendentes2;
+    const pendingStatuses = [
+      ORDER_STATUS.ATENDIMENTO_RECEBIDO,
+      ORDER_STATUS.ATENDIMENTO_ORCADO
+    ];
+    const pendingOrders = (await Promise.all(pendingStatuses.map((status) => this.countPedidosByStatus(status))))
+      .reduce((acc, count) => acc + count, 0);
 
     // Contar pedidos finalizados hoje
     const completedToday = await this.countCompletedOrdersToday();

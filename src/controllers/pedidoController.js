@@ -5,9 +5,32 @@ const pdfService = require('../services/pdfService');
 const setorService = require('../services/setorService');
 const AWS = require('aws-sdk');
 const archiver = require('archiver');
+const { ORDER_STATUS, normalizeStatus } = require('../utils/orderStatus');
 
 const s3 = new AWS.S3();
 const PRESIGNED_URL_EXPIRES_SECONDS = Number(process.env.S3_PRESIGNED_EXPIRES_SECONDS || 3600);
+const STRICT_STATUS_VALIDATION = process.env.STRICT_STATUS_VALIDATION === 'true';
+
+function validarENormalizarStatus(status, obrigatorio = false) {
+  if (!status) {
+    if (obrigatorio) {
+      return { ok: false, error: 'Status é obrigatório' };
+    }
+    return { ok: true, value: null };
+  }
+
+  try {
+    return {
+      ok: true,
+      value: normalizeStatus(status, {
+        strict: STRICT_STATUS_VALIDATION,
+        fallback: ORDER_STATUS.ATENDIMENTO_RECEBIDO
+      })
+    };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+}
 
 function extrairS3KeyDaFoto(foto, bucket) {
   if (!foto || typeof foto !== 'string') return null;
@@ -22,18 +45,26 @@ function extrairS3KeyDaFoto(foto, bucket) {
     const pathLimpo = pathname.replace(/^\/+/, '');
     const host = (url.hostname || '').toLowerCase();
     const bucketLower = (bucket || '').toLowerCase();
+    const isS3Host = host === 's3.amazonaws.com' || /^s3[.-].*\.amazonaws\.com$/.test(host);
 
     if (bucketLower && host.startsWith(`${bucketLower}.s3`)) {
       return pathLimpo;
     }
 
-    if (bucketLower && host === 's3.amazonaws.com' && pathLimpo.startsWith(`${bucket}/`)) {
-      return pathLimpo.slice(bucket.length + 1);
+    if (bucketLower && host === bucketLower) {
+      return pathLimpo;
     }
 
-    return pathLimpo;
+    if (bucketLower && isS3Host) {
+      if (pathLimpo.startsWith(`${bucket}/`)) {
+        return pathLimpo.slice(bucket.length + 1);
+      }
+      return null;
+    }
+
+    return null;
   } catch (_error) {
-    return foto;
+    return null;
   }
 }
 
@@ -322,7 +353,15 @@ exports.createPedido = async (req, res) => {
     }
 
     // Status inicial padrão
-    const statusInicial = status || 'Atendimento - Recebido';
+    const statusNormalizado = validarENormalizarStatus(status);
+    if (!statusNormalizado.ok) {
+      return res.status(400).json({
+        success: false,
+        error: statusNormalizado.error
+      });
+    }
+
+    const statusInicial = statusNormalizado.value || ORDER_STATUS.ATENDIMENTO_RECEBIDO;
 
     // Estruturar dados do pedido
     const dadosPedido = {
@@ -418,7 +457,20 @@ exports.createPedido = async (req, res) => {
 
 exports.updatePedido = async (req, res) => {
   try {
-    const atualizado = await pedidoService.updatePedido(req.params.id, req.body);
+    const updates = { ...req.body };
+
+    if (updates.status) {
+      const statusNormalizado = validarENormalizarStatus(updates.status, true);
+      if (!statusNormalizado.ok) {
+        return res.status(400).json({
+          success: false,
+          error: statusNormalizado.error
+        });
+      }
+      updates.status = statusNormalizado.value;
+    }
+
+    const atualizado = await pedidoService.updatePedido(req.params.id, updates);
     if (!atualizado) return res.status(404).json({ error: 'Pedido não encontrado' });
     res.status(200).json(assinarFotosPedido(atualizado));
   } catch (err) {
@@ -538,6 +590,16 @@ exports.patchPedido = async (req, res) => {
 
     // Validação de permissões para alteração de status
     if (updatesPermitidos.status) {
+      const statusNormalizado = validarENormalizarStatus(updatesPermitidos.status, true);
+      if (!statusNormalizado.ok) {
+        return res.status(400).json({
+          success: false,
+          error: statusNormalizado.error
+        });
+      }
+
+      updatesPermitidos.status = statusNormalizado.value;
+
       const canUpdateStatus = (userRole, newStatus) => {
         // Todas as roles podem alterar qualquer status
         return true;
@@ -555,7 +617,12 @@ exports.patchPedido = async (req, res) => {
       }
 
       // Se o status está sendo alterado, adicionar ao histórico
-      if (updatesPermitidos.status !== pedidoAtual.status) {
+      const statusAtualNormalizado = normalizeStatus(pedidoAtual.status, {
+        strict: false,
+        fallback: pedidoAtual.status
+      });
+
+      if (updatesPermitidos.status !== statusAtualNormalizado) {
         const novoHistorico = {
           status: updatesPermitidos.status,
           date: new Date().toISOString().split('T')[0],
@@ -626,12 +693,15 @@ exports.updatePedidoStatus = async (req, res) => {
     const { status } = req.body;
     const { role, sub: userId, email: userEmail } = req.user || {};
     
-    if (!status) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Status é obrigatório' 
+    const statusNormalizado = validarENormalizarStatus(status, true);
+    if (!statusNormalizado.ok) {
+      return res.status(400).json({
+        success: false,
+        error: statusNormalizado.error
       });
     }
+
+    const novoStatus = statusNormalizado.value;
 
     // Validar permissões baseado no cargo
     const canUpdateStatus = (userRole, newStatus) => {
@@ -639,7 +709,7 @@ exports.updatePedidoStatus = async (req, res) => {
       return true;
     };
 
-    if (!canUpdateStatus(role, status)) {
+    if (!canUpdateStatus(role, novoStatus)) {
       return res.status(403).json({ 
         success: false, 
         error: 'Usuário não tem permissão para alterar para este status' 
@@ -657,7 +727,7 @@ exports.updatePedidoStatus = async (req, res) => {
 
     // Criar novo item do histórico
     const novoHistorico = {
-      status: status,
+      status: novoStatus,
       date: new Date().toISOString().split('T')[0],
       time: new Date().toTimeString().split(' ')[0].substring(0, 5),
       userId: userId,
@@ -670,7 +740,7 @@ exports.updatePedidoStatus = async (req, res) => {
 
     // Atualizar pedido com novo status e histórico
     const updates = {
-      status: status,
+      status: novoStatus,
       statusHistory: statusHistory,
       updatedAt: new Date().toISOString()
     };
@@ -678,7 +748,7 @@ exports.updatePedidoStatus = async (req, res) => {
     const atualizado = await pedidoService.updatePedido(req.params.id, updates);
 
     // Enviar notificações
-    await enviarNotificacoesPedido(atualizado, status);
+    await enviarNotificacoesPedido(atualizado, novoStatus);
 
     res.status(200).json({
       success: true,
@@ -1048,7 +1118,7 @@ exports.moverParaSetor = async (req, res) => {
     const setores = setorService.listarSetores();
     const setor = setores.find(s => s.id === setorId);
     const nomeSetor = setor ? setor.nome : setorId;
-    const statusTexto = `Em produção - ${nomeSetor}`;
+    const statusTexto = pedidoAtualizado?.status || `Em produção - ${nomeSetor}`;
     await enviarNotificacoesPedido(pedidoAtualizado, statusTexto);
 
     res.status(200).json({

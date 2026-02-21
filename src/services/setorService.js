@@ -1,6 +1,7 @@
 const { SETORES_PADRAO } = require('../models/setorModel');
 const pedidoService = require('./pedidoService');
 const emailService = require('./emailService');
+const { ORDER_STATUS, getStatusBySetor, isFinalStatus } = require('../utils/orderStatus');
 
 /**
  * Retorna todos os setores padrão do sistema
@@ -155,7 +156,16 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
   console.log('[SetorService] Abrindo novo setor:', setor.nome);
   
   // Atualizar status legível
-  const statusLegivel = `${setor.nome}${setor.id === 'atendimento-final' ? ' - Finalizado' : ' - Em Andamento'}`;
+  const statusLegivel = getStatusBySetor(setor);
+
+  const novoHistoricoStatus = {
+    status: statusLegivel,
+    date: agora.split('T')[0],
+    time: new Date().toTimeString().split(' ')[0].substring(0, 5),
+    userId: usuario.sub || usuario.email,
+    userName: usuario.name || usuario.email,
+    timestamp: agora
+  };
   
   // Preparar atualizações
   const updates = {
@@ -165,11 +175,12 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
     departamento: setor.nome,
     funcionarioAtual: funcionarioNome || usuario.name || usuario.email,
     updatedAt: agora,
-    updatedBy: usuario.email
+    updatedBy: usuario.email,
+    statusHistory: [...(pedido.statusHistory || []), novoHistoricoStatus]
   };
   
   // Se chegou no atendimento final, marcar como finalizado e enviar email
-  if (novoSetorId === 'atendimento-final') {
+  if (isFinalStatus(statusLegivel) || novoSetorId === 'atendimento-final') {
     updates.dataEntregaReal = agora.split('T')[0];
     
     console.log('[SetorService] Pedido chegou ao setor final, enviando email...');
@@ -183,7 +194,7 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
         await emailService.enviarStatusPedido(
           cliente.email,
           cliente.nome,
-          'finalizado',
+          ORDER_STATUS.ATENDIMENTO_FINALIZADO,
           pedido.descricaoServicos || pedido.servicos?.map(s => s.nome).join(', ') || 'Serviços diversos',
           pedido.modeloTenis || 'Tênis',
           pedido.codigo

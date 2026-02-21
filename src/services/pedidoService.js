@@ -2,6 +2,7 @@ const AWS = require('aws-sdk');
 const { v4: uuidv4 } = require('uuid');
 const { enviarEmail } = require("./emailService");
 const { getCliente } = require('./clienteService');
+const { ORDER_STATUS } = require('../utils/orderStatus');
 const tableName = process.env.DYNAMODB_PEDIDO_TABLE || 'shoeRepairPedidos';
 
 const dynamoDb = new AWS.DynamoDB.DocumentClient({ region: process.env.AWS_REGION });
@@ -109,7 +110,7 @@ exports.createPedido = async (pedido) => {
       data: ''
     },
     acessorios: pedido.acessorios || [],
-    status: pedido.status || 'Atendimento - Recebido',
+    status: pedido.status || ORDER_STATUS.ATENDIMENTO_RECEBIDO,
     dataCriacao: pedido.dataCriacao || new Date().toISOString(),
     createdAt: pedido.createdAt || new Date().toISOString(),
     updatedAt: pedido.updatedAt || new Date().toISOString(),

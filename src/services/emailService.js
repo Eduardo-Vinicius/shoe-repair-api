@@ -1,5 +1,6 @@
 const AWS = require('aws-sdk');
 const nodemailer = require("nodemailer");
+const { ORDER_STATUS, normalizeStatus, isFinalStatus } = require('../utils/orderStatus');
 
 // Configuração do transporte de e-mail
 const transporter = nodemailer.createTransport({
@@ -12,7 +13,8 @@ const transporter = nodemailer.createTransport({
 
 // Função para gerar o conteúdo do e-mail com HTML estilizado
 function gerarConteudoEmail(nomeCliente, status, descricaoServicos, modeloTenis, codigoPedido, fotos = []) {
-  const statusLower = status.toLowerCase();
+  const statusNormalizado = normalizeStatus(status, { strict: false, fallback: String(status || '') });
+  const statusLower = String(statusNormalizado || status || '').toLowerCase();
   
   // Gerar HTML das fotos se existirem
   let fotosHtml = '';
@@ -30,7 +32,12 @@ function gerarConteudoEmail(nomeCliente, status, descricaoServicos, modeloTenis,
   }
 
   // Email de criação do pedido
-  if (statusLower === "criado" || statusLower === "created" || statusLower.includes("aguardando")) {
+  if (
+    statusLower === "criado" ||
+    statusLower === "created" ||
+    statusLower.includes("aguardando") ||
+    statusNormalizado === ORDER_STATUS.ATENDIMENTO_RECEBIDO
+  ) {
     return {
       subject: `✅ Pedido #${codigoPedido} - Confirmação de Recebimento`,
       html: `
@@ -90,7 +97,7 @@ Obrigado pela confiança!
   }
 
   // Email de pedido finalizado
-  if (statusLower === "concluido" || statusLower === "finalizado" || statusLower.includes("finalizado")) {
+  if (isFinalStatus(statusNormalizado)) {
     return {
       subject: `🎊 Pedido #${codigoPedido} - Finalizado! Pronto para Retirada`,
       html: `
@@ -574,12 +581,7 @@ async function enviarSMSStatus(telefoneCliente, nomeCliente, status, codigoPedid
   }
 
   // ENVIAR SMS APENAS PARA STATUS FINALIZADOS (economia de custos)
-  const statusLower = (status || '').toLowerCase();
-  const isStatusFinalizado = 
-    statusLower.includes('atendimento - finalizado') ||
-    statusLower.includes('finalizado') ||
-    statusLower.includes('pronto para retirada') ||
-    statusLower.includes('aguardando retirada');
+  const isStatusFinalizado = isFinalStatus(status);
 
   if (!isStatusFinalizado) {
     console.log('[SMS] ⏭️  SMS não enviado - apenas para status finalizados. Status atual:', status);
