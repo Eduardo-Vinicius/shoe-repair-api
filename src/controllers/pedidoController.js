@@ -792,7 +792,8 @@ exports.updatePedidoStatus = async (req, res) => {
         setorIdResolvido,
         usuario,
         req.body?.funcionarioNome,
-        req.body?.observacao
+        req.body?.observacao,
+        novoStatus
       );
 
       if (!pedidoMovido?._noMovement) {
@@ -1226,7 +1227,8 @@ exports.moverParaSetor = async (req, res) => {
       setorIdResolvido, 
       usuario, 
       funcionarioNome, 
-      observacao
+      observacao,
+      status
     );
 
     if (pedidoAtualizado?._noMovement) {

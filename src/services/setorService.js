@@ -1,7 +1,7 @@
 const { SETORES_PADRAO } = require('../models/setorModel');
 const pedidoService = require('./pedidoService');
 const emailService = require('./emailService');
-const { ORDER_STATUS, getStatusBySetor, isFinalStatus } = require('../utils/orderStatus');
+const { ORDER_STATUS, getStatusBySetor, isFinalStatus, normalizeStatus } = require('../utils/orderStatus');
 
 /**
  * Retorna todos os setores padrão do sistema
@@ -88,9 +88,10 @@ function determinarSetoresPorServicos(servicos) {
  * @param {Object} usuario - Dados do usuário que está movendo
  * @param {String} funcionarioNome - Nome do funcionário que está movendo (opcional)
  * @param {String} observacao - Observação sobre a movimentação (opcional)
+ * @param {String} statusOverride - Status explícito para quando a coluna é da mesma família do setor
  * @returns {Object} Pedido atualizado
  */
-async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioNome = null, observacao = '') {
+async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioNome = null, observacao = '', statusOverride = null) {
   console.log('[SetorService] Movendo pedido para setor:', {
     pedidoId,
     novoSetorId,
@@ -111,15 +112,52 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
   }
 
   if (pedido.setorAtual === novoSetorId) {
-    console.log('[SetorService] Pedido já está no setor de destino. Ignorando movimentação repetida:', {
-      pedidoId,
-      setorId: novoSetorId
+    // Permitir atualização de status dentro do mesmo setor (ex: Atendimento Recebido -> Orçado)
+    const agora = new Date().toISOString();
+    const statusNormalizado = statusOverride
+      ? normalizeStatus(statusOverride, { strict: false, fallback: pedido.status })
+      : pedido.status;
+
+    if (statusNormalizado === pedido.status) {
+      console.log('[SetorService] Pedido já está no setor e status alvo é o mesmo. Ignorando movimentação repetida:', {
+        pedidoId,
+        setorId: novoSetorId,
+        status: statusNormalizado
+      });
+
+      return {
+        ...pedido,
+        _noMovement: true
+      };
+    }
+
+    const statusHistory = pedido.statusHistory || [];
+    statusHistory.push({
+      status: statusNormalizado,
+      date: agora.split('T')[0],
+      time: new Date().toTimeString().split(' ')[0].substring(0, 5),
+      userId: usuario.sub || usuario.email,
+      userName: usuario.name || usuario.email,
+      timestamp: agora
     });
 
-    return {
-      ...pedido,
-      _noMovement: true
+    const updates = {
+      status: statusNormalizado,
+      statusHistory,
+      updatedAt: agora,
+      updatedBy: usuario.email,
+      funcionarioAtual: funcionarioNome || usuario.name || usuario.email
     };
+
+    const pedidoAtualizadoMesmoSetor = await pedidoService.updatePedido(pedidoId, updates);
+
+    console.log('[SetorService] Status atualizado dentro do mesmo setor:', {
+      pedidoId,
+      setorId: novoSetorId,
+      status: statusNormalizado
+    });
+
+    return pedidoAtualizadoMesmoSetor;
   }
   
   // Validar se setor está no fluxo do pedido
@@ -167,8 +205,10 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
   
   console.log('[SetorService] Abrindo novo setor:', setor.nome);
   
-  // Atualizar status legível
-  const statusLegivel = getStatusBySetor(setor);
+  // Atualizar status legível (ou usa override quando coluna representa um status específico)
+  const statusLegivel = statusOverride
+    ? normalizeStatus(statusOverride, { strict: false, fallback: getStatusBySetor(setor) })
+    : getStatusBySetor(setor);
 
   const novoHistoricoStatus = {
     status: statusLegivel,
