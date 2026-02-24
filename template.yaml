@@ -111,6 +111,10 @@ Resources:
                 Resource: !Sub 'arn:aws:s3:::${ShoeRepairFotosBucket}/*'
               - Effect: Allow
                 Action:
+                  - s3:ListBucket
+                Resource: !Sub 'arn:aws:s3:::${ShoeRepairFotosBucket}'
+              - Effect: Allow
+                Action:
                   - ses:SendEmail
                   - ses:SendRawEmail
                 Resource: '*'
