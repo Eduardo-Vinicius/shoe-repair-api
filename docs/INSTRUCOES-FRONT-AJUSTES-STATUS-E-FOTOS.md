@@ -94,6 +94,7 @@ Fotos e PDFs são retornados com links presigned (temporários).
    - Exibir `funcionarioAtual` no card e no detalhe do pedido.
    - Ao arrastar, exigir `funcionarioNome` (modal já existe) e enviar no payload.
    - Filtrar Kanban por funcionário usando `GET /pedidos/kanban/status?funcionario=<nome>` (consulta por atual ou histórico).
+   - Para o seletor de funcionário em cada coluna, buscar via `GET /funcionarios?setorId=<setorId>&ativo=true` (novo cadastro de funcionários por setor).
 
 ---
 

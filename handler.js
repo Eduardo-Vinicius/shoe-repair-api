@@ -10,6 +10,7 @@ const authRoutes = require('./src/routes/authRoutes');
 const statusRoutes = require('./src/routes/statusRoutes');
 const dashboardRoutes = require('./src/routes/dashboardRoutes');
 const setorRoutes = require('./src/routes/setorRoutes');
+const funcionarioRoutes = require('./src/routes/funcionarioRoutes');
 
 const app = express();
 
@@ -48,6 +49,7 @@ app.use('/auth', authRoutes);
 app.use('/status', statusRoutes);
 app.use('/dashboard', dashboardRoutes);
 app.use('/setores', setorRoutes);
+app.use('/funcionarios', funcionarioRoutes);
 
 app.get('/', (req, res) => {
   console.log('[Handler] Requisição recebida na rota raiz');

@@ -27,6 +27,7 @@ Resources:
           DYNAMODB_COUNTER_TABLE: !Ref ShoeRepairCountersTable
           S3_BUCKET_NAME: !Ref ShoeRepairFotosBucket
           DYNAMODB_USER_TABLE: !Ref ShoeRepairUsersTable
+          DYNAMODB_FUNCIONARIO_TABLE: !Ref ShoeRepairFuncionariosTable
           JWT_SECRET: !Ref JWTSecret
           REFRESH_SECRET: !Ref RefreshSecret
           JWT_EXPIRES: !Ref JWTExpires
@@ -176,6 +177,30 @@ Resources:
       KeySchema:
         - AttributeName: id
           KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+  ShoeRepairFuncionariosTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ShoeRepairFuncionarios
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: setorId
+          AttributeType: S
+        - AttributeName: ativo
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: setorId-index
+          KeySchema:
+            - AttributeName: setorId
+              KeyType: HASH
+            - AttributeName: ativo
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
       BillingMode: PAY_PER_REQUEST
   # API Gateway HTTP API (v2) - Melhor suporte a CORS
 
