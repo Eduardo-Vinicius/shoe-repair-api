@@ -804,11 +804,22 @@ exports.updatePedidoStatus = async (req, res) => {
       return res.status(200).json({
         success: true,
         data: {
+          // Retorna o pedido completo para o front reagrupar corretamente no Kanban
           id: pedidoResposta.id,
           status: pedidoResposta.status,
           statusHistory: pedidoResposta.statusHistory,
           updatedAt: pedidoResposta.updatedAt,
-          fotos: pedidoResposta.fotos || []
+          fotos: pedidoResposta.fotos || [],
+          setorAtual: pedidoResposta.setorAtual,
+          setoresFluxo: pedidoResposta.setoresFluxo,
+          setoresHistorico: pedidoResposta.setoresHistorico,
+          departamento: pedidoResposta.departamento,
+          funcionarioAtual: pedidoResposta.funcionarioAtual,
+          prioridade: pedidoResposta.prioridade || 2,
+          codigo: pedidoResposta.codigo,
+          clientName: pedidoResposta.clientName,
+          dataCriacao: pedidoResposta.dataCriacao,
+          dataPrevistaEntrega: pedidoResposta.dataPrevistaEntrega
         },
         message: pedidoMovido?._noMovement ? 'Status já está atualizado' : 'Status atualizado com sucesso'
       });
@@ -839,14 +850,27 @@ exports.updatePedidoStatus = async (req, res) => {
     // Enviar notificações
     await enviarNotificacoesPedido(atualizado, novoStatus);
 
+    const pedidoResposta = assinarFotosPedido(atualizado);
+
     res.status(200).json({
       success: true,
       data: {
-        id: atualizado.id,
-        status: atualizado.status,
-        statusHistory: atualizado.statusHistory,
-        updatedAt: atualizado.updatedAt,
-        fotos: (assinarFotosPedido(atualizado).fotos || [])
+        // Retorna o pedido completo para o front reagrupar corretamente no Kanban
+        id: pedidoResposta.id,
+        status: pedidoResposta.status,
+        statusHistory: pedidoResposta.statusHistory,
+        updatedAt: pedidoResposta.updatedAt,
+        fotos: pedidoResposta.fotos || [],
+        setorAtual: pedidoResposta.setorAtual,
+        setoresFluxo: pedidoResposta.setoresFluxo,
+        setoresHistorico: pedidoResposta.setoresHistorico,
+        departamento: pedidoResposta.departamento,
+        funcionarioAtual: pedidoResposta.funcionarioAtual,
+        prioridade: pedidoResposta.prioridade || 2,
+        codigo: pedidoResposta.codigo,
+        clientName: pedidoResposta.clientName,
+        dataCriacao: pedidoResposta.dataCriacao,
+        dataPrevistaEntrega: pedidoResposta.dataPrevistaEntrega
       },
       message: 'Status atualizado com sucesso'
     });
