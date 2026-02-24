@@ -222,6 +222,19 @@ exports.listPedidosStatus = async (req, res) => {
   try {
     const { role, sub: userId } = req.user || {};
     let pedidos = await pedidoService.listPedidos();
+
+    // Filtro opcional por funcionário (atual ou histórico)
+    const funcionarioFiltro = (req.query?.funcionario || '').trim().toLowerCase();
+    if (funcionarioFiltro) {
+      pedidos = pedidos.filter(pedido => {
+        const atual = (pedido.funcionarioAtual || '').toLowerCase();
+        const historico = (pedido.setoresHistorico || []).some(h =>
+          (h.funcionarioEntrada || '').toLowerCase().includes(funcionarioFiltro) ||
+          (h.funcionarioSaida || '').toLowerCase().includes(funcionarioFiltro)
+        );
+        return atual.includes(funcionarioFiltro) || historico;
+      });
+    }
     
     // Todas as roles veem todos os pedidos
     // Filtragem removida para permitir acesso completo
@@ -301,10 +314,76 @@ exports.listPedidosStatus = async (req, res) => {
 exports.listPedidos = async (req, res) => {
   try {
     let pedidos = await pedidoService.listPedidos();
+
+    const funcionarioFiltro = (req.query?.funcionario || '').trim().toLowerCase();
+    if (funcionarioFiltro) {
+      pedidos = pedidos.filter(pedido => {
+        const atual = (pedido.funcionarioAtual || '').toLowerCase();
+        const historico = (pedido.setoresHistorico || []).some(h =>
+          (h.funcionarioEntrada || '').toLowerCase().includes(funcionarioFiltro) ||
+          (h.funcionarioSaida || '').toLowerCase().includes(funcionarioFiltro)
+        );
+        return atual.includes(funcionarioFiltro) || historico;
+      });
+    }
     // Sempre retorna 200, nunca 304
     res.status(200).json(pedidos.map(assinarFotosPedido));
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+// GET /pedidos/consulta - lista leve para busca/consulta
+exports.searchPedidosConsulta = async (req, res) => {
+  try {
+    const {
+      codigo,
+      cliente,
+      status,
+      setor,
+      funcionario,
+      dataInicio,
+      dataFim,
+      limit,
+      lastKey
+    } = req.query || {};
+
+    let exclusiveStartKey;
+    if (lastKey) {
+      try {
+        exclusiveStartKey = JSON.parse(Buffer.from(String(lastKey), 'base64').toString('utf8'));
+      } catch (parseErr) {
+        console.warn('[searchPedidosConsulta] lastKey inválido, ignorando:', parseErr.message);
+      }
+    }
+
+    const result = await pedidoService.searchPedidosLite({
+      codigo,
+      cliente,
+      status,
+      setorAtual: setor,
+      funcionario,
+      dataInicio,
+      dataFim,
+      limit,
+      exclusiveStartKey
+    });
+
+    const nextToken = result.lastKey
+      ? Buffer.from(JSON.stringify(result.lastKey)).toString('base64')
+      : null;
+
+    res.status(200).json({
+      success: true,
+      data: result.items,
+      nextToken,
+      count: result.items.length
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
   }
 };
 

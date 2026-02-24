@@ -9,6 +9,7 @@ router.use(authMiddleware);
 // Rotas de pedidos
 router.get('/', pedidoController.listPedidos);
 router.get('/kanban/status', pedidoController.listPedidosStatus);
+router.get('/consulta', pedidoController.searchPedidosConsulta);
 router.get('/:id', pedidoController.getPedido);
 router.post('/', pedidoController.createPedido);
 router.put('/:id', pedidoController.updatePedido);

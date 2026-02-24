@@ -70,7 +70,8 @@ Fotos e PDFs são retornados com links presigned (temporários).
    - Usar labels exatamente como retornadas pela API.
 
 2. **Atualização de status**
-   - Ao mover card ou alterar status, enviar string de status no payload.
+   - Ao mover card ou alterar status, enviar string de status no payload **e** o `funcionarioNome` digitado no modal.
+   - Usar sempre o objeto completo retornado pela API (status, setorAtual, setoresHistorico, funcionarioAtual, prioridade, etc.) para reclassificar o card localmente.
    - Em caso de `400`, exibir erro de status inválido e manter card na coluna atual.
 
 3. **Exibição de fotos**
@@ -89,7 +90,21 @@ Fotos e PDFs são retornados com links presigned (temporários).
    - Botão “Atualizar links” na tela de detalhes do pedido.
    - Indicador de expiração/recarga quando links falharem.
 
+7. **Funcionalidade de funcionário**
+   - Exibir `funcionarioAtual` no card e no detalhe do pedido.
+   - Ao arrastar, exigir `funcionarioNome` (modal já existe) e enviar no payload.
+   - Filtrar Kanban por funcionário usando `GET /pedidos/kanban/status?funcionario=<nome>` (consulta por atual ou histórico).
+
 ---
+
+## 7) Tela de consulta de pedidos (leve)
+
+- Endpoint dedicado: `GET /pedidos/consulta`.
+- Filtros suportados: `codigo`, `cliente`, `status`, `setor`, `funcionario`, `dataInicio`, `dataFim`, `limit`, `lastKey`.
+- Resposta: `{ data: PedidoLite[], nextToken, count }` (payload leve, sem fotos).
+- Padrão de paginação: use `nextToken` (base64) em `lastKey` na próxima chamada.
+- Campos sugeridos para tabela: Código, Cliente, Status, Setor, Funcionário, Criado em, Prev. Entrega, Prioridade. Ação “Detalhes” chama `GET /pedidos/:id`.
+- Uso sugerido para filtro rápido por funcionário: chamar `/pedidos/kanban/status?funcionario=<nome>` ou a nova `/pedidos/consulta` para listas grandes.
 
 ## 4) Tratamento de erros recomendado
 

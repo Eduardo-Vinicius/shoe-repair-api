@@ -201,3 +201,94 @@ exports.updatePedidoStatus = async (id, status) => {
   const data = await dynamoDb.update(params).promise();
   return data.Attributes;
 };
+
+/**
+ * Consulta leve de pedidos com filtros e paginação opcional
+ */
+exports.searchPedidosLite = async ({
+  codigo,
+  cliente,
+  status,
+  setorAtual,
+  funcionario,
+  dataInicio,
+  dataFim,
+  limit = 50,
+  exclusiveStartKey
+}) => {
+  const params = {
+    TableName: tableName,
+    Limit: Number(limit) || 50,
+    ProjectionExpression: '#id, codigo, clientName, clienteId, #status, setorAtual, funcionarioAtual, dataCriacao, dataPrevistaEntrega, updatedAt, prioridade, departamento',
+    ExpressionAttributeNames: {
+      '#id': 'id',
+      '#status': 'status',
+      '#clientName': 'clientName'
+    }
+  };
+
+  const filterExp = [];
+  const exprNames = params.ExpressionAttributeNames;
+  const exprValues = {};
+
+  if (codigo) {
+    exprNames['#codigo'] = 'codigo';
+    exprValues[':codigo'] = codigo;
+    filterExp.push('#codigo = :codigo');
+  }
+
+  if (status) {
+    exprValues[':status'] = status;
+    filterExp.push('#status = :status');
+  }
+
+  if (setorAtual) {
+    exprNames['#setorAtual'] = 'setorAtual';
+    exprValues[':setorAtual'] = setorAtual;
+    filterExp.push('#setorAtual = :setorAtual');
+  }
+
+  if (funcionario) {
+    exprNames['#funcionarioAtual'] = 'funcionarioAtual';
+    exprValues[':funcionario'] = funcionario;
+    filterExp.push('contains(#funcionarioAtual, :funcionario)');
+  }
+
+  if (cliente) {
+    exprNames['#nomeCliente'] = 'nomeCliente';
+    exprValues[':cliente'] = cliente;
+    // Considera clientName e nomeCliente (legado)
+    filterExp.push('(contains(#clientName, :cliente) OR contains(#nomeCliente, :cliente))');
+  }
+
+  if (dataInicio && dataFim) {
+    exprNames['#dataCriacao'] = 'dataCriacao';
+    exprValues[':dataInicio'] = dataInicio;
+    exprValues[':dataFim'] = dataFim;
+    filterExp.push('#dataCriacao BETWEEN :dataInicio AND :dataFim');
+  } else if (dataInicio) {
+    exprNames['#dataCriacao'] = 'dataCriacao';
+    exprValues[':dataInicio'] = dataInicio;
+    filterExp.push('#dataCriacao >= :dataInicio');
+  } else if (dataFim) {
+    exprNames['#dataCriacao'] = 'dataCriacao';
+    exprValues[':dataFim'] = dataFim;
+    filterExp.push('#dataCriacao <= :dataFim');
+  }
+
+  if (filterExp.length > 0) {
+    params.FilterExpression = filterExp.join(' AND ');
+    params.ExpressionAttributeValues = exprValues;
+  }
+
+  if (exclusiveStartKey) {
+    params.ExclusiveStartKey = exclusiveStartKey;
+  }
+
+  const data = await dynamoDb.scan(params).promise();
+
+  return {
+    items: data.Items || [],
+    lastKey: data.LastEvaluatedKey || null
+  };
+};
