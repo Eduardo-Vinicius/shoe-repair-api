@@ -100,30 +100,16 @@ class PdfService {
     const bucket = resolved?.bucket;
     const key = resolved?.key;
 
-    // Tenta primeiro pegar direto do S3 (mais rápido e confiável)
-    if (bucket && key) {
-      try {
-        const result = await s3.getObject({ Bucket: bucket, Key: key }).promise();
-        const formato = this.getFormatoImagem(result.ContentType, key);
-        if (!formato) return null;
-
-        const base64 = result.Body.toString('base64');
-        return {
-          formato,
-          dataUrl: `data:${result.ContentType || (formato === 'PNG' ? 'image/png' : 'image/jpeg')};base64,${base64}`
-        };
-      } catch (s3Error) {
-        console.warn(`[PdfService] Falha ao carregar foto do S3 (${bucket}/${key}):`, s3Error.message);
-      }
-    }
-
-    // Fallback: baixar a URL diretamente (presigned ou pública)
+    // 1) Tentar baixar direto da URL (presigned) para contornar qualquer permissão de IAM
     if (foto && foto.startsWith('http')) {
       try {
-        const response = await axios.get(foto, { responseType: 'arraybuffer' });
+        const response = await axios.get(foto, { responseType: 'arraybuffer', timeout: 10000 });
         const contentType = response.headers['content-type'] || '';
-        const formato = this.getFormatoImagem(contentType, foto);
-        if (!formato) return null;
+        const formato = this.getFormatoImagem(contentType, key || foto);
+        if (!formato) {
+          console.warn('[PdfService] Formato não suportado para foto (URL):', contentType, 'key:', key || 'sem-key');
+          return null;
+        }
 
         const base64 = Buffer.from(response.data).toString('base64');
         return {
@@ -135,6 +121,27 @@ class PdfService {
       }
     }
 
+    // 2) Fallback: tentar S3 direto (caso URL não funcione ou não exista)
+    if (bucket && key) {
+      try {
+        const result = await s3.getObject({ Bucket: bucket, Key: key }).promise();
+        const formato = this.getFormatoImagem(result.ContentType, key);
+        if (!formato) {
+          console.warn('[PdfService] Formato não suportado para foto (S3):', result.ContentType, 'key:', key);
+          return null;
+        }
+
+        const base64 = result.Body.toString('base64');
+        return {
+          formato,
+          dataUrl: `data:${result.ContentType || (formato === 'PNG' ? 'image/png' : 'image/jpeg')};base64,${base64}`
+        };
+      } catch (s3Error) {
+        console.warn(`[PdfService] Falha ao carregar foto do S3 (${bucket}/${key}):`, s3Error.message);
+      }
+    }
+
+    console.warn('[PdfService] Não foi possível carregar foto para PDF:', foto);
     return null;
   }
   
@@ -503,6 +510,7 @@ class PdfService {
           try {
             const fotoCarregada = await this.carregarFotoParaPdf(fotosPedido[index]);
             if (!fotoCarregada) {
+              console.warn(`[PdfService] Foto ${index + 1} ignorada (não carregou)`);
               continue;
             }
 
@@ -512,6 +520,14 @@ class PdfService {
             const escala = Math.min(maxWidth / props.width, maxHeight / props.height);
             const width = props.width * escala;
             const height = props.height * escala;
+
+            console.log(`[PdfService] Foto ${index + 1} propriedades:`, {
+              width: props.width,
+              height: props.height,
+              scaledWidth: width,
+              scaledHeight: height,
+              format: fotoCarregada.formato
+            });
 
             if (fotoY + height + 12 > pageHeight - 20) {
               doc.addPage();
