@@ -5,8 +5,8 @@ const clienteService = require('./clienteService');
 const AWS = require('aws-sdk');
 const StringSanitizer = require('../utils/stringSanitizer');
 
-// Configurar S3
-const s3 = new AWS.S3();
+// Configurar S3 com região explícita
+const s3 = new AWS.S3({ region: process.env.AWS_REGION || 'us-east-1' });
 const MAX_FOTOS_PDF = Number(process.env.PDF_MAX_EMBEDDED_FOTOS || 6);
 const PRESIGNED_URL_EXPIRES_SECONDS = Number(process.env.S3_PRESIGNED_EXPIRES_SECONDS || 3600);
 
@@ -99,6 +99,15 @@ class PdfService {
     const resolved = resolverBucketEKey(foto);
     const bucket = resolved?.bucket;
     const key = resolved?.key;
+    const envBucket = process.env.S3_BUCKET_NAME;
+
+    // Lista de candidatos para tentar no S3 (resolver + env)
+    const s3Candidates = [];
+    if (bucket && key) s3Candidates.push({ bucket, key });
+    if (envBucket) {
+      const keyEnv = extrairS3KeyDaFoto(foto, envBucket);
+      if (keyEnv) s3Candidates.push({ bucket: envBucket, key: keyEnv });
+    }
 
     // 1) Tentar baixar direto da URL (presigned) para contornar qualquer permissão de IAM
     if (foto && foto.startsWith('http')) {
@@ -122,22 +131,23 @@ class PdfService {
     }
 
     // 2) Fallback: tentar S3 direto (caso URL não funcione ou não exista)
-    if (bucket && key) {
+    for (const candidate of s3Candidates) {
       try {
-        const result = await s3.getObject({ Bucket: bucket, Key: key }).promise();
-        const formato = this.getFormatoImagem(result.ContentType, key);
+        const result = await s3.getObject({ Bucket: candidate.bucket, Key: candidate.key }).promise();
+        const formato = this.getFormatoImagem(result.ContentType, candidate.key);
         if (!formato) {
-          console.warn('[PdfService] Formato não suportado para foto (S3):', result.ContentType, 'key:', key);
-          return null;
+          console.warn('[PdfService] Formato não suportado para foto (S3):', result.ContentType, 'key:', candidate.key);
+          continue;
         }
 
         const base64 = result.Body.toString('base64');
+        console.log('[PdfService] Foto carregada via S3', { bucket: candidate.bucket, key: candidate.key, contentType: result.ContentType });
         return {
           formato,
           dataUrl: `data:${result.ContentType || (formato === 'PNG' ? 'image/png' : 'image/jpeg')};base64,${base64}`
         };
       } catch (s3Error) {
-        console.warn(`[PdfService] Falha ao carregar foto do S3 (${bucket}/${key}):`, s3Error.message);
+        console.warn(`[PdfService] Falha ao carregar foto do S3 (${candidate.bucket}/${candidate.key}):`, s3Error.message);
       }
     }
 
