@@ -1,4 +1,5 @@
 const { jsPDF } = require('jspdf');
+const axios = require('axios');
 const pedidoService = require('./pedidoService');
 const clienteService = require('./clienteService');
 const AWS = require('aws-sdk');
@@ -62,24 +63,44 @@ class PdfService {
 
   async carregarFotoParaPdf(foto) {
     const bucket = process.env.S3_BUCKET_NAME;
-    if (!bucket) return null;
+    const key = bucket ? extrairS3KeyDaFoto(foto, bucket) : null;
 
-    const key = extrairS3KeyDaFoto(foto, bucket);
-    if (!key) return null;
+    // Tenta primeiro pegar direto do S3 (mais rápido e confiável)
+    if (bucket && key) {
+      try {
+        const result = await s3.getObject({ Bucket: bucket, Key: key }).promise();
+        const formato = this.getFormatoImagem(result.ContentType, key);
+        if (!formato) return null;
 
-    const result = await s3.getObject({
-      Bucket: bucket,
-      Key: key
-    }).promise();
+        const base64 = result.Body.toString('base64');
+        return {
+          formato,
+          dataUrl: `data:${result.ContentType || (formato === 'PNG' ? 'image/png' : 'image/jpeg')};base64,${base64}`
+        };
+      } catch (s3Error) {
+        console.warn(`[PdfService] Falha ao carregar foto do S3 (${key}):`, s3Error.message);
+      }
+    }
 
-    const formato = this.getFormatoImagem(result.ContentType, key);
-    if (!formato) return null;
+    // Fallback: baixar a URL diretamente (presigned ou pública)
+    if (foto && foto.startsWith('http')) {
+      try {
+        const response = await axios.get(foto, { responseType: 'arraybuffer' });
+        const contentType = response.headers['content-type'] || '';
+        const formato = this.getFormatoImagem(contentType, foto);
+        if (!formato) return null;
 
-    const base64 = result.Body.toString('base64');
-    return {
-      formato,
-      dataUrl: `data:${result.ContentType || (formato === 'PNG' ? 'image/png' : 'image/jpeg')};base64,${base64}`
-    };
+        const base64 = Buffer.from(response.data).toString('base64');
+        return {
+          formato,
+          dataUrl: `data:${contentType || (formato === 'PNG' ? 'image/png' : 'image/jpeg')};base64,${base64}`
+        };
+      } catch (httpError) {
+        console.warn('[PdfService] Falha ao baixar foto via URL:', httpError.message);
+      }
+    }
+
+    return null;
   }
   
   // Função para fazer upload do PDF para S3

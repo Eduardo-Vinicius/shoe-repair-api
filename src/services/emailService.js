@@ -2,6 +2,64 @@ const AWS = require('aws-sdk');
 const nodemailer = require("nodemailer");
 const { ORDER_STATUS, normalizeStatus, isFinalStatus } = require('../utils/orderStatus');
 
+const s3 = new AWS.S3();
+const PRESIGNED_URL_EXPIRES_SECONDS = Number(process.env.S3_PRESIGNED_EXPIRES_SECONDS || 3600);
+
+function extrairS3KeyDaFoto(foto, bucket) {
+  if (!foto || typeof foto !== 'string') return null;
+
+  if (!foto.startsWith('http')) {
+    return foto.replace(/^\/+/, '');
+  }
+
+  try {
+    const url = new URL(foto);
+    const pathname = decodeURIComponent(url.pathname || '');
+    const pathLimpo = pathname.replace(/^\/+/, '');
+    const host = (url.hostname || '').toLowerCase();
+    const bucketLower = (bucket || '').toLowerCase();
+    const isS3Host = host === 's3.amazonaws.com' || /^s3[.-].*\.amazonaws\.com$/.test(host);
+
+    if (bucketLower && host.startsWith(`${bucketLower}.s3`)) {
+      return pathLimpo;
+    }
+
+    if (bucketLower && host === bucketLower) {
+      return pathLimpo;
+    }
+
+    if (bucketLower && isS3Host) {
+      if (pathLimpo.startsWith(`${bucket}/`)) {
+        return pathLimpo.slice(bucket.length + 1);
+      }
+      return null;
+    }
+
+    return null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function gerarUrlPresignedFoto(foto) {
+  const bucket = process.env.S3_BUCKET_NAME;
+  if (!bucket) return foto;
+
+  const key = extrairS3KeyDaFoto(foto, bucket);
+  if (!key) return foto;
+
+  return s3.getSignedUrl('getObject', {
+    Bucket: bucket,
+    Key: key,
+    Expires: PRESIGNED_URL_EXPIRES_SECONDS
+  });
+}
+
+function assinarFotosEmail(fotos = []) {
+  if (!Array.isArray(fotos) || fotos.length === 0) return [];
+  return fotos.map(gerarUrlPresignedFoto);
+}
+
 // Configuração do transporte de e-mail
 const transporter = nodemailer.createTransport({
   service: "gmail", // Usando o serviço Gmail
@@ -13,17 +71,18 @@ const transporter = nodemailer.createTransport({
 
 // Função para gerar o conteúdo do e-mail com HTML estilizado
 function gerarConteudoEmail(nomeCliente, status, descricaoServicos, modeloTenis, codigoPedido, fotos = []) {
+  const fotosAssinadas = assinarFotosEmail(fotos);
   const statusNormalizado = normalizeStatus(status, { strict: false, fallback: String(status || '') });
   const statusLower = String(statusNormalizado || status || '').toLowerCase();
   
   // Gerar HTML das fotos se existirem
   let fotosHtml = '';
-  if (fotos && fotos.length > 0) {
+  if (fotosAssinadas && fotosAssinadas.length > 0) {
     fotosHtml = `
       <div class="info-box">
         <h3>📸 Fotos do Pedido</h3>
         <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
-          ${fotos.map(foto => `
+          ${fotosAssinadas.map(foto => `
             <img src="${foto}" alt="Foto do pedido" style="width: 150px; height: 150px; object-fit: cover; border-radius: 5px; border: 2px solid #ddd;" />
           `).join('')}
         </div>
