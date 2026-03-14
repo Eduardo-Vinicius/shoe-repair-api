@@ -109,28 +109,15 @@ class PdfService {
       if (keyEnv) s3Candidates.push({ bucket: envBucket, key: keyEnv });
     }
 
-    // 1) Tentar baixar direto da URL (presigned) para contornar qualquer permissão de IAM
-    if (foto && foto.startsWith('http')) {
-      try {
-        const response = await axios.get(foto, { responseType: 'arraybuffer', timeout: 10000 });
-        const contentType = response.headers['content-type'] || '';
-        const formato = this.getFormatoImagem(contentType, key || foto);
-        if (!formato) {
-          console.warn('[PdfService] Formato não suportado para foto (URL):', contentType, 'key:', key || 'sem-key');
-          return null;
-        }
+    console.log('[PdfService] Tentando carregar foto', {
+      fotoPreview: typeof foto === 'string' ? foto.slice(0, 120) : 'non-string',
+      resolvedBucket: bucket,
+      resolvedKey: key,
+      envBucket,
+      s3CandidatesCount: s3Candidates.length
+    });
 
-        const base64 = Buffer.from(response.data).toString('base64');
-        return {
-          formato,
-          dataUrl: `data:${contentType || (formato === 'PNG' ? 'image/png' : 'image/jpeg')};base64,${base64}`
-        };
-      } catch (httpError) {
-        console.warn('[PdfService] Falha ao baixar foto via URL:', httpError.message);
-      }
-    }
-
-    // 2) Fallback: tentar S3 direto (caso URL não funcione ou não exista)
+    // 1) Tentar S3 direto primeiro (usa credencial da Lambda, evita 403 de URL presigned expirada)
     for (const candidate of s3Candidates) {
       try {
         const result = await s3.getObject({ Bucket: candidate.bucket, Key: candidate.key }).promise();
@@ -147,7 +134,39 @@ class PdfService {
           dataUrl: `data:${result.ContentType || (formato === 'PNG' ? 'image/png' : 'image/jpeg')};base64,${base64}`
         };
       } catch (s3Error) {
-        console.warn(`[PdfService] Falha ao carregar foto do S3 (${candidate.bucket}/${candidate.key}):`, s3Error.message);
+        console.warn('[PdfService] Falha ao carregar foto do S3', {
+          bucket: candidate.bucket,
+          key: candidate.key,
+          code: s3Error.code,
+          statusCode: s3Error.statusCode,
+          region: process.env.AWS_REGION || 'us-east-1',
+          message: s3Error.message
+        });
+      }
+    }
+
+    // 2) Fallback: baixar a URL presigned/pública
+    if (foto && foto.startsWith('http')) {
+      try {
+        const response = await axios.get(foto, { responseType: 'arraybuffer', timeout: 10000 });
+        const contentType = response.headers['content-type'] || '';
+        const formato = this.getFormatoImagem(contentType, key || foto);
+        if (!formato) {
+          console.warn('[PdfService] Formato não suportado para foto (URL):', contentType, 'key:', key || 'sem-key');
+          return null;
+        }
+
+        const base64 = Buffer.from(response.data).toString('base64');
+        return {
+          formato,
+          dataUrl: `data:${contentType || (formato === 'PNG' ? 'image/png' : 'image/jpeg')};base64,${base64}`
+        };
+      } catch (httpError) {
+        console.warn('[PdfService] Falha ao baixar foto via URL', {
+          status: httpError.response?.status,
+          statusText: httpError.response?.statusText,
+          message: httpError.message
+        });
       }
     }
 
