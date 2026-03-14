@@ -8,6 +8,7 @@ const StringSanitizer = require('../utils/stringSanitizer');
 // Configurar S3
 const s3 = new AWS.S3();
 const MAX_FOTOS_PDF = Number(process.env.PDF_MAX_EMBEDDED_FOTOS || 6);
+const PRESIGNED_URL_EXPIRES_SECONDS = Number(process.env.S3_PRESIGNED_EXPIRES_SECONDS || 3600);
 
 function extrairS3KeyDaFoto(foto, bucket) {
   if (!foto || typeof foto !== 'string') return null;
@@ -45,6 +46,39 @@ function extrairS3KeyDaFoto(foto, bucket) {
   }
 }
 
+function resolverBucketEKey(foto) {
+  const envBucket = process.env.S3_BUCKET_NAME;
+
+  if (envBucket) {
+    const key = extrairS3KeyDaFoto(foto, envBucket);
+    if (key) return { bucket: envBucket, key };
+  }
+
+  try {
+    const url = new URL(foto);
+    const host = (url.hostname || '').toLowerCase();
+    const pathLimpo = decodeURIComponent((url.pathname || '').replace(/^\/+/u, ''));
+
+    // Formatos: bucket.s3.amazonaws.com/key ou bucket.s3-<region>.amazonaws.com/key
+    const hostMatch = host.match(/^(.+)\.s3[.-][a-z0-9-]+\.amazonaws\.com$/);
+    if (hostMatch && hostMatch[1]) {
+      return { bucket: hostMatch[1], key: pathLimpo };
+    }
+
+    // Formato: s3.amazonaws.com/bucket/key
+    if (host === 's3.amazonaws.com') {
+      const [bucketFromPath, ...rest] = pathLimpo.split('/');
+      if (bucketFromPath && rest.length > 0) {
+        return { bucket: bucketFromPath, key: rest.join('/') };
+      }
+    }
+  } catch (_error) {
+    // Ignora erro de parsing e retorna null
+  }
+
+  return null;
+}
+
 class PdfService {
   getFormatoImagem(contentType = '', key = '') {
     const contentTypeLower = String(contentType || '').toLowerCase();
@@ -62,8 +96,9 @@ class PdfService {
   }
 
   async carregarFotoParaPdf(foto) {
-    const bucket = process.env.S3_BUCKET_NAME;
-    const key = bucket ? extrairS3KeyDaFoto(foto, bucket) : null;
+    const resolved = resolverBucketEKey(foto);
+    const bucket = resolved?.bucket;
+    const key = resolved?.key;
 
     // Tenta primeiro pegar direto do S3 (mais rápido e confiável)
     if (bucket && key) {
@@ -78,7 +113,7 @@ class PdfService {
           dataUrl: `data:${result.ContentType || (formato === 'PNG' ? 'image/png' : 'image/jpeg')};base64,${base64}`
         };
       } catch (s3Error) {
-        console.warn(`[PdfService] Falha ao carregar foto do S3 (${key}):`, s3Error.message);
+        console.warn(`[PdfService] Falha ao carregar foto do S3 (${bucket}/${key}):`, s3Error.message);
       }
     }
 

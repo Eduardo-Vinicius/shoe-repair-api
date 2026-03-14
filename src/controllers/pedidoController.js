@@ -102,6 +102,39 @@ function extrairS3KeyDaFoto(foto, bucket) {
   }
 }
 
+function resolverBucketEKey(foto) {
+  const envBucket = process.env.S3_BUCKET_NAME;
+
+  if (envBucket) {
+    const key = extrairS3KeyDaFoto(foto, envBucket);
+    if (key) return { bucket: envBucket, key };
+  }
+
+  try {
+    const url = new URL(foto);
+    const host = (url.hostname || '').toLowerCase();
+    const pathLimpo = decodeURIComponent((url.pathname || '').replace(/^\/+/u, ''));
+
+    // Formatos: bucket.s3.amazonaws.com/key ou bucket.s3-<region>.amazonaws.com/key
+    const hostMatch = host.match(/^(.+)\.s3[.-][a-z0-9-]+\.amazonaws\.com$/);
+    if (hostMatch && hostMatch[1]) {
+      return { bucket: hostMatch[1], key: pathLimpo };
+    }
+
+    // Formato: s3.amazonaws.com/bucket/key
+    if (host === 's3.amazonaws.com') {
+      const [bucketFromPath, ...rest] = pathLimpo.split('/');
+      if (bucketFromPath && rest.length > 0) {
+        return { bucket: bucketFromPath, key: rest.join('/') };
+      }
+    }
+  } catch (_error) {
+    // Ignora erros de parsing
+  }
+
+  return null;
+}
+
 function gerarUrlPresignedFoto(foto) {
   const bucket = process.env.S3_BUCKET_NAME;
   if (!bucket) return foto;
@@ -1406,11 +1439,14 @@ exports.downloadPedidoFotosZip = async (req, res) => {
       });
     }
 
-    const bucket = process.env.S3_BUCKET_NAME;
+    const bucketEnv = process.env.S3_BUCKET_NAME;
+    const bucketFallback = resolverBucketEKey(pedido.fotos[0])?.bucket || null;
+    const bucket = bucketEnv || bucketFallback;
+
     if (!bucket) {
       return res.status(500).json({
         success: false,
-        message: 'Bucket S3 não configurado'
+        message: 'Bucket S3 não configurado e não foi possível inferir do URL das fotos'
       });
     }
 
@@ -1439,15 +1475,15 @@ exports.downloadPedidoFotosZip = async (req, res) => {
     for (let index = 0; index < pedido.fotos.length; index++) {
       try {
         const foto = pedido.fotos[index];
-        const key = extrairS3KeyDaFoto(foto, bucket);
-        if (!key) continue;
+        const resolved = resolverBucketEKey(foto) || { bucket, key: extrairS3KeyDaFoto(foto, bucket) };
+        if (!resolved || !resolved.bucket || !resolved.key) continue;
 
         const arquivo = await s3.getObject({
-          Bucket: bucket,
-          Key: key
+          Bucket: resolved.bucket,
+          Key: resolved.key
         }).promise();
 
-        const nomeOriginal = key.split('/').pop() || '';
+        const nomeOriginal = resolved.key.split('/').pop() || '';
         const extensaoOriginal = nomeOriginal.includes('.') ? nomeOriginal.slice(nomeOriginal.lastIndexOf('.')) : '';
         const extensao = extensaoOriginal || extensaoPorContentType(arquivo.ContentType);
         const nomeArquivo = `foto-${index + 1}${extensao}`;
