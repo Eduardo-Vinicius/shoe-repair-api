@@ -1,4 +1,4 @@
-const { getAllStatusColumns, getStatusColumnsByRole } = require('../utils/orderStatus');
+const { getAllStatusColumns } = require('../utils/orderStatus');
 
   exports.getStatusColumns = async (req, res) => {
     try {
@@ -19,27 +19,9 @@ const { getAllStatusColumns, getStatusColumnsByRole } = require('../utils/orderS
    */
   exports.getStatusColumnsFiltered = async (req, res) => {
     try {
-      const { role } = req.user || {};
-
-      if (!role) {
-        return res.status(403).json({
-          success: false,
-          error: 'Role do usuário não encontrada.'
-        });
-      }
-
-      const columns = getStatusColumnsByRole(role);
-
-      if (!columns) {
-        return res.status(404).json({
-          success: false,
-          error: `Nenhuma coluna configurada para a role: ${role}`
-        });
-      }
-
       res.status(200).json({
         success: true,
-        data: columns
+        data: getAllStatusColumns()
       });
     } catch (err) {
       res.status(500).json({

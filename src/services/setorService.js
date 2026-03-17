@@ -159,12 +159,20 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
 
     return pedidoAtualizadoMesmoSetor;
   }
-  
-  // Validar se setor está no fluxo do pedido
-  if (!pedido.setoresFluxo || !pedido.setoresFluxo.includes(novoSetorId)) {
-    throw new Error(`Setor ${setor.nome} não está no fluxo deste pedido`);
+
+  // Fluxo agora é dinâmico: garante que o setor de destino esteja listado, mesmo que não estivesse no fluxo original
+  const fluxoAtual = Array.isArray(pedido.setoresFluxo) ? [...pedido.setoresFluxo] : [];
+  if (!fluxoAtual.includes(novoSetorId)) {
+    fluxoAtual.push(novoSetorId);
+    fluxoAtual.sort((a, b) => {
+      const setorA = getSetor(a);
+      const setorB = getSetor(b);
+      const ordemA = setorA?.ordem || 0;
+      const ordemB = setorB?.ordem || 0;
+      return ordemA - ordemB;
+    });
   }
-  
+
   const agora = new Date().toISOString();
   const setoresHistorico = pedido.setoresHistorico || [];
   
@@ -222,6 +230,7 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
   // Preparar atualizações
   const updates = {
     setorAtual: novoSetorId,
+    setoresFluxo: fluxoAtual,
     setoresHistorico,
     status: statusLegivel,
     departamento: setor.nome,
