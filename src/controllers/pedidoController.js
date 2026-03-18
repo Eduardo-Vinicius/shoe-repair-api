@@ -315,6 +315,8 @@ exports.listPedidosStatus = async (req, res) => {
       },
       acessorios: pedido.acessorios || [],
       prioridade: pedido.prioridade || 2,
+      departamentosSelecionados: pedido.departamentosSelecionados || [],
+      observacoesFluxo: pedido.observacoesFluxo || [],
       setorAtual: pedido.setorAtual || null,
       departamento: pedido.departamento || '',
       setoresHistorico: pedido.setoresHistorico || [],
@@ -522,6 +524,7 @@ exports.createPedido = async (req, res) => {
       dataPrevistaEntrega,
       departamento: departamento || 'Atendimento',
       observacoes: observacoes || '',
+      observacoesFluxo: Array.isArray(req.body?.observacoesFluxo) ? req.body.observacoesFluxo : [],
       garantia: garantia || {
         ativa: false,
         duracao: '',
@@ -560,6 +563,10 @@ exports.createPedido = async (req, res) => {
     try {
       const fluxo = setorService.determinarSetoresPorServicos(servicos);
       const agora = new Date().toISOString();
+      const departamentosSelecionados = fluxo.map(setorId => {
+        const setor = setorService.getSetor(setorId);
+        return setor ? { id: setor.id, nome: setor.nome } : { id: setorId, nome: setorId };
+      });
 
       dadosPedido.setoresFluxo = fluxo;
       dadosPedido.setorAtual = 'atendimento-inicial';
@@ -578,6 +585,7 @@ exports.createPedido = async (req, res) => {
           observacoes: ''
         }
       ];
+      dadosPedido.departamentosSelecionados = departamentosSelecionados;
     } catch (fluxError) {
       console.warn('[PedidoController] Falha ao determinar fluxo de setores:', fluxError.message);
       // Mantém setores vazios se houver erro na determinação

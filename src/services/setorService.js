@@ -111,14 +111,30 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
     throw new Error('Pedido não encontrado');
   }
 
+  const appendObservacaoFluxo = (observacaoTexto, basePedido, setorDestino) => {
+    if (!observacaoTexto) return basePedido.observacoesFluxo || [];
+    const lista = Array.isArray(basePedido.observacoesFluxo) ? [...basePedido.observacoesFluxo] : [];
+    lista.push({
+      setorId: setorDestino.id,
+      setorNome: setorDestino.nome,
+      observacao: observacaoTexto,
+      usuario: usuario.email,
+      usuarioNome: usuario.name || usuario.email,
+      timestamp: new Date().toISOString()
+    });
+    return lista;
+  };
+
   if (pedido.setorAtual === novoSetorId) {
-    // Permitir atualização de status dentro do mesmo setor (ex: Atendimento Recebido -> Orçado)
+    // Permitir atualização de status ou apenas registrar observação dentro do mesmo setor
     const agora = new Date().toISOString();
     const statusNormalizado = statusOverride
       ? normalizeStatus(statusOverride, { strict: false, fallback: pedido.status })
       : pedido.status;
 
-    if (statusNormalizado === pedido.status) {
+    const observacoesFluxo = appendObservacaoFluxo(observacao, pedido, setor);
+
+    if (statusNormalizado === pedido.status && observacoesFluxo === (pedido.observacoesFluxo || [])) {
       console.log('[SetorService] Pedido já está no setor e status alvo é o mesmo. Ignorando movimentação repetida:', {
         pedidoId,
         setorId: novoSetorId,
@@ -127,31 +143,35 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
 
       return {
         ...pedido,
+        observacoesFluxo,
         _noMovement: true
       };
     }
 
     const statusHistory = pedido.statusHistory || [];
-    statusHistory.push({
-      status: statusNormalizado,
-      date: agora.split('T')[0],
-      time: new Date().toTimeString().split(' ')[0].substring(0, 5),
-      userId: usuario.sub || usuario.email,
-      userName: usuario.name || usuario.email,
-      timestamp: agora
-    });
+    if (statusNormalizado !== pedido.status) {
+      statusHistory.push({
+        status: statusNormalizado,
+        date: agora.split('T')[0],
+        time: new Date().toTimeString().split(' ')[0].substring(0, 5),
+        userId: usuario.sub || usuario.email,
+        userName: usuario.name || usuario.email,
+        timestamp: agora
+      });
+    }
 
     const updates = {
       status: statusNormalizado,
       statusHistory,
       updatedAt: agora,
       updatedBy: usuario.email,
-      funcionarioAtual: funcionarioNome || usuario.name || usuario.email
+      funcionarioAtual: funcionarioNome || usuario.name || usuario.email,
+      observacoesFluxo
     };
 
     const pedidoAtualizadoMesmoSetor = await pedidoService.updatePedido(pedidoId, updates);
 
-    console.log('[SetorService] Status atualizado dentro do mesmo setor:', {
+    console.log('[SetorService] Status/observação atualizados dentro do mesmo setor:', {
       pedidoId,
       setorId: novoSetorId,
       status: statusNormalizado
@@ -175,6 +195,7 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
 
   const agora = new Date().toISOString();
   const setoresHistorico = pedido.setoresHistorico || [];
+  const observacoesFluxo = appendObservacaoFluxo(observacao, pedido, setor);
   
   // Fechar setor anterior (se houver)
   if (pedido.setorAtual) {
@@ -230,6 +251,7 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
   // Preparar atualizações
   const updates = {
     setorAtual: novoSetorId,
+    observacoesFluxo,
     setoresFluxo: fluxoAtual,
     setoresHistorico,
     status: statusLegivel,

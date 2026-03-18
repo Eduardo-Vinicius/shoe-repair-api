@@ -119,6 +119,8 @@ exports.createPedido = async (pedido) => {
     createdBy: pedido.createdBy || null,
     // Persistir campos do sistema de setores
     setoresFluxo: Array.isArray(pedido.setoresFluxo) ? pedido.setoresFluxo : [],
+    observacoesFluxo: Array.isArray(pedido.observacoesFluxo) ? pedido.observacoesFluxo : [],
+    departamentosSelecionados: Array.isArray(pedido.departamentosSelecionados) ? pedido.departamentosSelecionados : [],
     setorAtual: pedido.setorAtual || null,
     setoresHistorico: Array.isArray(pedido.setoresHistorico) ? pedido.setoresHistorico : [],
     // Manter compatibilidade com campos antigos se existirem
