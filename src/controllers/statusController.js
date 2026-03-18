@@ -2,19 +2,8 @@ const { getAllStatusColumns, getStatusColumnsByRole } = require('../utils/orderS
 
 exports.getStatusColumns = async (req, res) => {
   try {
-    const { role } = req.user || {};
-
-    // Admin vê tudo; demais vêem apenas as colunas do próprio departamento
-    const columns = role === 'admin'
-      ? getAllStatusColumns()
-      : getStatusColumnsByRole(role);
-
-    if (!columns) {
-      return res.status(403).json({
-        success: false,
-        error: 'Role do usuário não encontrada ou sem colunas configuradas.'
-      });
-    }
+    // Rota aberta para autenticados: sempre retorna todas as colunas, sem filtro por departamento/cargo
+    const columns = getAllStatusColumns();
 
     res.status(200).json({
       success: true,
