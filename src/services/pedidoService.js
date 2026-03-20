@@ -221,7 +221,7 @@ exports.searchPedidosLite = async ({
   const params = {
     TableName: tableName,
     Limit: Number(limit) || 50,
-    ProjectionExpression: '#id, codigo, clientName, clienteId, #status, setorAtual, funcionarioAtual, dataCriacao, dataPrevistaEntrega, updatedAt, prioridade, departamento',
+    ProjectionExpression: '#id, codigo, #clientName, clienteId, #status, setorAtual, funcionarioAtual, dataCriacao, dataPrevistaEntrega, updatedAt, prioridade, departamento',
     ExpressionAttributeNames: {
       '#id': 'id',
       '#status': 'status',
