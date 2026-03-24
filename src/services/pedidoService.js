@@ -3,8 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const { enviarEmail } = require("./emailService");
 const { getCliente } = require('./clienteService');
 const { ORDER_STATUS } = require('../utils/orderStatus');
-const tableName = process.env.DYNAMODB_PEDIDO_TABLE || 'worqeraPedidos';
-const counterTable = process.env.DYNAMODB_COUNTER_TABLE || 'WorqeraCounters';
+const tableName = process.env.DYNAMODB_PEDIDO_TABLE || 'shoeRepairPedidos';
 
 const dynamoDb = new AWS.DynamoDB.DocumentClient({ region: process.env.AWS_REGION });
 
@@ -20,7 +19,7 @@ const dynamoDb = new AWS.DynamoDB.DocumentClient({ region: process.env.AWS_REGIO
  * - Perfeito para uso em balcão de loja
  * - Escala bem: até 999 pedidos por dia
  */
-async function gerarCodigoPedido(tenantId) {
+async function gerarCodigoPedido() {
   const now = new Date();
   // Formato: DDMMYY (ex: 160126)
   const dia = now.getDate().toString().padStart(2, '0');
@@ -29,12 +28,12 @@ async function gerarCodigoPedido(tenantId) {
   const dataKey = `${dia}${mes}${ano}`;
 
   // Sharding por dia: cada dia tem seu próprio contador
-  const counterId = tenantId ? `pedido-${tenantId}-${dataKey}` : `pedido-${dataKey}`;
+  const counterId = `pedido-${dataKey}`;
 
   try {
     // Tenta incrementar o contador atômico para o dia atual
     const params = {
-      TableName: counterTable,
+      TableName: 'ShoeRepairCounters',
       Key: { id: counterId },
       UpdateExpression: 'ADD #count :incr',
       ExpressionAttributeNames: {
@@ -74,35 +73,25 @@ async function gerarCodigoPedido(tenantId) {
   }
 }
 
-exports.listPedidos = async (tenantId) => {
+exports.listPedidos = async () => {
   const params = { TableName: tableName };
-
-  if (tenantId) {
-    params.FilterExpression = '#tenantId = :tenantId';
-    params.ExpressionAttributeNames = { '#tenantId': 'tenantId' };
-    params.ExpressionAttributeValues = { ':tenantId': tenantId };
-  }
-
   const data = await dynamoDb.scan(params).promise();
-  return data.Items || [];
+  return data.Items;
 };
 
-exports.getPedido = async (id, tenantId) => {
+exports.getPedido = async (id) => {
   const params = { TableName: tableName, Key: { id } };
   const data = await dynamoDb.get(params).promise();
-  if (!data.Item) return null;
-  if (tenantId && data.Item.tenantId !== tenantId) return null;
   return data.Item;
 };
 
-exports.createPedido = async (pedido, tenantId) => {
+exports.createPedido = async (pedido) => {
   // Gera um código sequencial para o pedido
-  const codigoPedido = await gerarCodigoPedido(tenantId);
+  const codigoPedido = await gerarCodigoPedido();
 
   const novoPedido = { 
     id: uuidv4(), // Mantém o UUID como chave primária interna
     codigo: codigoPedido, // Novo campo com código sequencial legível
-    tenantId,
     clienteId: pedido.clienteId,
     clientName: pedido.clientName,
     modeloTenis: pedido.modeloTenis,
@@ -145,7 +134,7 @@ exports.createPedido = async (pedido, tenantId) => {
 
   // Enviar e-mail após criar o pedido
     try {
-      const cliente = await getCliente(novoPedido.clienteId, tenantId);
+      const cliente = await getCliente(novoPedido.clienteId);
       const subject = `✅ Pedido #${codigoPedido} - Confirmação de Recebimento`;
   
       const emailCliente = (cliente && cliente.email) ? String(cliente.email).trim() : null;
@@ -166,7 +155,7 @@ exports.createPedido = async (pedido, tenantId) => {
     return novoPedido;
 };
 
-exports.updatePedido = async (id, updates, tenantId) => {
+exports.updatePedido = async (id, updates) => {
   let updateExp = 'set ';
   const attrNames = {};
   const attrValues = {};
@@ -184,29 +173,19 @@ exports.updatePedido = async (id, updates, tenantId) => {
     UpdateExpression: updateExp,
     ExpressionAttributeNames: attrNames,
     ExpressionAttributeValues: attrValues,
-    ConditionExpression: tenantId ? '#tenantId = :tenantId' : undefined,
     ReturnValues: 'ALL_NEW',
   };
-  if (tenantId) {
-    params.ExpressionAttributeNames['#tenantId'] = 'tenantId';
-    params.ExpressionAttributeValues[':tenantId'] = tenantId;
-  }
   const data = await dynamoDb.update(params).promise();
   return data.Attributes;
 };
 
-exports.deletePedido = async (id, tenantId) => {
+exports.deletePedido = async (id) => {
   const params = { TableName: tableName, Key: { id } };
-  if (tenantId) {
-    params.ConditionExpression = '#tenantId = :tenantId';
-    params.ExpressionAttributeNames = { '#tenantId': 'tenantId' };
-    params.ExpressionAttributeValues = { ':tenantId': tenantId };
-  }
   await dynamoDb.delete(params).promise();
   return true;
 };
 
-exports.updatePedidoStatus = async (id, status, tenantId) => {
+exports.updatePedidoStatus = async (id, status) => {
   const params = {
     TableName: tableName,
     Key: { id },
@@ -219,13 +198,8 @@ exports.updatePedidoStatus = async (id, status, tenantId) => {
       ':status': status,
       ':updatedAt': new Date().toISOString()
     },
-    ConditionExpression: tenantId ? '#tenantId = :tenantId' : undefined,
     ReturnValues: 'ALL_NEW',
   };
-  if (tenantId) {
-    params.ExpressionAttributeNames['#tenantId'] = 'tenantId';
-    params.ExpressionAttributeValues[':tenantId'] = tenantId;
-  }
   const data = await dynamoDb.update(params).promise();
   return data.Attributes;
 };
@@ -242,8 +216,7 @@ exports.searchPedidosLite = async ({
   dataInicio,
   dataFim,
   limit = 50,
-  exclusiveStartKey,
-  tenantId
+  exclusiveStartKey
 }) => {
   const params = {
     TableName: tableName,
@@ -259,12 +232,6 @@ exports.searchPedidosLite = async ({
   const filterExp = [];
   const exprNames = params.ExpressionAttributeNames;
   const exprValues = {};
-
-  if (tenantId) {
-    exprNames['#tenantId'] = 'tenantId';
-    exprValues[':tenantId'] = tenantId;
-    filterExp.push('#tenantId = :tenantId');
-  }
 
   if (codigo) {
     exprNames['#codigo'] = 'codigo';

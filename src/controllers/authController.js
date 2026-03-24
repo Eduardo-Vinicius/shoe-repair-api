@@ -19,30 +19,25 @@ const setoresValidos = [
 
 // Registro de usuário com setor inicial
 exports.register = async (req, res) => {
-  const tenantId = req.tenantId;
   const { email, password, nome, role } = req.body;
-  if (!tenantId) return res.status(400).json({ error: 'X-Tenant obrigatório.' });
   if (!email || !password) return res.status(400).json({ error: 'Email e senha obrigatórios.' });
-  const exists = await userService.getUserByEmail(email, tenantId);
+  const exists = await userService.getUserByEmail(email);
   if (exists) return res.status(409).json({ error: 'Usuário já existe.' });
 
   // Define o setor inicial como "Atendimento" no objeto de resposta
-  const user = await userService.createUser({ email, password, nome, role, tenantId });
+  const user = await userService.createUser({ email, password, nome, role });
   res.status(201).json({ id: user.id, email: user.email, nome: user.nome, role: user.role, setor: 'Atendimento' });
 };
 
 // Login do usuário
 exports.login = async (req, res) => {
-  const tenantId = req.tenantId;
   const { email, password } = req.body;
-  if (!tenantId) return res.status(400).json({ error: 'X-Tenant obrigatório.' });
   if (!email || !password) return res.status(400).json({ error: 'Email e senha obrigatórios.' });
-  const user = await userService.getUserByEmail(email, tenantId);
+  const user = await userService.getUserByEmail(email);
   if (!user || user.password !== password) return res.status(401).json({ error: 'Credenciais inválidas.' });
 
-  const tokenPayload = { sub: user.id, email: user.email, role: user.role, tenantId };
-  const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRES });
-  const refreshToken = jwt.sign({ sub: user.id, tenantId }, REFRESH_SECRET, { expiresIn: REFRESH_EXPIRES });
+  const token = jwt.sign({ sub: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+  const refreshToken = jwt.sign({ sub: user.id }, REFRESH_SECRET, { expiresIn: REFRESH_EXPIRES });
 
   // Retorna o setor inicial como "Atendimento"
   res.status(200).json({ token, refreshToken, setor: 'Atendimento' });
@@ -50,19 +45,14 @@ exports.login = async (req, res) => {
 
 // Atualizar setor do usuário
 exports.updateSetor = async (req, res) => {
-  const tenantId = req.tenantId;
   const { userId, setor } = req.body;
-
-  if (!tenantId) {
-    return res.status(400).json({ error: 'X-Tenant obrigatório.' });
-  }
 
   if (!setoresValidos.includes(setor)) {
     return res.status(400).json({ error: 'Setor inválido.' });
   }
 
   try {
-    const user = await userService.getUserById(userId, tenantId);
+    const user = await userService.getUserById(userId);
     if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
 
     // Simula a atualização do setor (não salva no banco)
@@ -82,20 +72,15 @@ exports.updateSetor = async (req, res) => {
 
 // Atualizar token de acesso
 exports.refreshToken = async (req, res) => {
-  const tenantId = req.tenantId;
   const { refreshToken } = req.body;
-  if (!tenantId) return res.status(400).json({ error: 'X-Tenant obrigatório.' });
   if (!refreshToken) return res.status(400).json({ error: 'refreshToken obrigatório.' });
 
   try {
     const payload = jwt.verify(refreshToken, REFRESH_SECRET);
-    if (!payload.tenantId || payload.tenantId !== tenantId) {
-      return res.status(401).json({ error: 'refreshToken inválido para o tenant informado.' });
-    }
-    const user = await userService.getUserById(payload.sub, tenantId);
+    const user = await userService.getUserById(payload.sub);
     if (!user) return res.status(401).json({ error: 'Usuário não encontrado.' });
 
-    const token = jwt.sign({ sub: user.id, email: user.email, role: user.role, tenantId }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+    const token = jwt.sign({ sub: user.id, email: user.email }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
 
     // Retorna o setor inicial como "Atendimento"
     res.status(200).json({ token, setor: 'Atendimento' });

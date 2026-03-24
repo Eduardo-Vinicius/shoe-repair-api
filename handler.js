@@ -12,7 +12,6 @@ const dashboardRoutes = require('./src/routes/dashboardRoutes');
 const setorRoutes = require('./src/routes/setorRoutes');
 const funcionarioRoutes = require('./src/routes/funcionarioRoutes');
 const metricsRoutes = require('./src/routes/metricsRoutes');
-const tenantMiddleware = require('./src/middleware/tenantMiddleware');
 
 const app = express();
 
@@ -20,8 +19,7 @@ const app = express();
 app.options('*', (req, res) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, X-Tenant');
-  res.header('Access-Control-Expose-Headers', 'X-Tenant-Resolved');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
   res.header('Access-Control-Max-Age', '86400');
   res.status(200).send();
 });
@@ -29,15 +27,11 @@ app.options('*', (req, res) => {
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, X-Tenant');
-  res.header('Access-Control-Expose-Headers', 'X-Tenant-Resolved');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
   next();
 });
 
 app.use(express.json());
-
-// Exige e anota o tenant em todas as requisições (exceto preflight)
-app.use(tenantMiddleware);
 
 // Middleware para logs de todas as requisições
 app.use((req, res, next) => {
