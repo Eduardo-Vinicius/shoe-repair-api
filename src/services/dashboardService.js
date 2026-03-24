@@ -7,9 +7,14 @@ const { ORDER_STATUS, normalizeStatus, isFinalStatus } = require('../utils/order
 const dynamoDb = new AWS.DynamoDB.DocumentClient({ region: process.env.AWS_REGION });
 
 // Função para contar pedidos por status
-exports.countPedidosByStatus = async (status) => {
-  const tableName = process.env.DYNAMODB_PEDIDO_TABLE || 'shoeRepairPedidos';
+exports.countPedidosByStatus = async (status, tenantId) => {
+  const tableName = process.env.DYNAMODB_PEDIDO_TABLE || 'worqeraPedidos';
   const params = { TableName: tableName };
+  if (tenantId) {
+    params.FilterExpression = '#tenantId = :tenantId';
+    params.ExpressionAttributeNames = { '#tenantId': 'tenantId' };
+    params.ExpressionAttributeValues = { ':tenantId': tenantId };
+  }
   const data = await dynamoDb.scan(params).promise();
 
   const statusAlvo = normalizeStatus(status, { strict: false, fallback: status });
@@ -20,11 +25,16 @@ exports.countPedidosByStatus = async (status) => {
 };
 
 // Função para contar pedidos finalizados hoje
-exports.countCompletedOrdersToday = async () => {
-  const tableName = process.env.DYNAMODB_PEDIDO_TABLE || 'shoeRepairPedidos';
+exports.countCompletedOrdersToday = async (tenantId) => {
+  const tableName = process.env.DYNAMODB_PEDIDO_TABLE || 'worqeraPedidos';
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
   const params = { TableName: tableName };
+  if (tenantId) {
+    params.FilterExpression = '#tenantId = :tenantId';
+    params.ExpressionAttributeNames = { '#tenantId': 'tenantId' };
+    params.ExpressionAttributeValues = { ':tenantId': tenantId };
+  }
   const data = await dynamoDb.scan(params).promise();
 
   return (data.Items || []).filter((pedido) => {
@@ -34,8 +44,8 @@ exports.countCompletedOrdersToday = async () => {
 };
 
 // Função para buscar pedidos recentes (últimos 10)
-exports.getRecentOrders = async (limit = 10) => {
-  const pedidos = await pedidoService.listPedidos();
+exports.getRecentOrders = async (limit = 10, tenantId) => {
+  const pedidos = await pedidoService.listPedidos(tenantId);
   
   // Ordenar por data de criação (mais recente primeiro)
   const pedidosOrdenados = pedidos.sort((a, b) => {
@@ -48,7 +58,7 @@ exports.getRecentOrders = async (limit = 10) => {
   // Buscar dados dos clientes para cada pedido
   const pedidosComClientes = await Promise.all(
     pedidosRecentes.map(async (pedido) => {
-      const cliente = await clienteService.getCliente(pedido.clienteId);
+      const cliente = await clienteService.getCliente(pedido.clienteId, tenantId);
       
       return {
         id: pedido.id,
@@ -70,10 +80,10 @@ exports.getRecentOrders = async (limit = 10) => {
 };
 
 // Função para obter estatísticas gerais do dashboard
-exports.getDashboardStats = async () => {
+exports.getDashboardStats = async (tenantId) => {
   try {
     // Buscar total de clientes
-    const clientes = await clienteService.listClientes();
+    const clientes = await clienteService.listClientes(tenantId);
     const totalClients = clientes.length;
 
     // Contar pedidos ativos (em processamento)
@@ -86,7 +96,7 @@ exports.getDashboardStats = async () => {
       ORDER_STATUS.ATENDIMENTO_APROVADO
     ];
 
-    const activeOrders = (await Promise.all(activeStatuses.map((status) => this.countPedidosByStatus(status))))
+    const activeOrders = (await Promise.all(activeStatuses.map((status) => this.countPedidosByStatus(status, tenantId))))
       .reduce((acc, count) => acc + count, 0);
 
     // Contar pedidos pendentes (iniciado, aguardando aprovação, etc.)
@@ -94,11 +104,11 @@ exports.getDashboardStats = async () => {
       ORDER_STATUS.ATENDIMENTO_RECEBIDO,
       ORDER_STATUS.ATENDIMENTO_ORCADO
     ];
-    const pendingOrders = (await Promise.all(pendingStatuses.map((status) => this.countPedidosByStatus(status))))
+    const pendingOrders = (await Promise.all(pendingStatuses.map((status) => this.countPedidosByStatus(status, tenantId))))
       .reduce((acc, count) => acc + count, 0);
 
     // Contar pedidos finalizados hoje
-    const completedToday = await this.countCompletedOrdersToday();
+    const completedToday = await this.countCompletedOrdersToday(tenantId);
 
     return {
       totalClients,
@@ -113,16 +123,16 @@ exports.getDashboardStats = async () => {
 };
 
 // Função para obter dados completos do dashboard
-exports.getDashboardData = async (userId) => {
+exports.getDashboardData = async (userId, tenantId) => {
   try {
     // Buscar estatísticas
-    const stats = await this.getDashboardStats();
+    const stats = await this.getDashboardStats(tenantId);
 
     // Buscar pedidos recentes
-    const recentOrders = await this.getRecentOrders();
+    const recentOrders = await this.getRecentOrders(undefined, tenantId);
 
     // Buscar dados do usuário
-    const user = await userService.getUserById(userId);
+    const user = await userService.getUserById(userId, tenantId);
     
     // Definir permissões baseadas no role
     let permissions = [];

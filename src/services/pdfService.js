@@ -285,13 +285,13 @@ class PdfService {
   }
 
   // Função principal para gerar PDF do pedido
-  async generatePedidoPdf(pedidoId) {
+  async generatePedidoPdf(pedidoId, tenantId) {
     try {
       console.log('=== INICIANDO GERAÇÃO DE PDF ===');
       console.log('pedidoId:', pedidoId);
       
       // Buscar dados do pedido
-      const pedidoRaw = await pedidoService.getPedido(pedidoId);
+      const pedidoRaw = await pedidoService.getPedido(pedidoId, tenantId);
       console.log('Dados do pedido retornados (antes da sanitização):', JSON.stringify(pedidoRaw, null, 2));
       
       if (!pedidoRaw) {
@@ -303,7 +303,7 @@ class PdfService {
       console.log('Dados do pedido sanitizados:', JSON.stringify(pedido, null, 2));
 
       // Buscar dados do cliente
-      const clienteRaw = await clienteService.getCliente(pedido.clienteId);
+      const clienteRaw = await clienteService.getCliente(pedido.clienteId, tenantId);
       console.log('Dados do cliente retornados (antes da sanitização):', JSON.stringify(clienteRaw, null, 2));
       
       if (!clienteRaw) {
