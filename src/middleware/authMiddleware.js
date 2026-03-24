@@ -8,15 +8,6 @@ module.exports = (req, res, next) => {
   const token = authHeader.split(' ')[1];
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    if (!req.tenantId) {
-      return res.status(400).json({ error: 'X-Tenant obrigatório.' });
-    }
-
-    if (!decoded.tenantId || decoded.tenantId !== req.tenantId) {
-      return res.status(401).json({ error: 'Token inválido para o tenant informado.' });
-    }
-
     req.user = decoded;
     next();
   } catch (err) {

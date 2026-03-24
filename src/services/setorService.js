@@ -91,7 +91,7 @@ function determinarSetoresPorServicos(servicos) {
  * @param {String} statusOverride - Status explícito para quando a coluna é da mesma família do setor
  * @returns {Object} Pedido atualizado
  */
-async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioNome = null, observacao = '', statusOverride = null, tenantId = null) {
+async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioNome = null, observacao = '', statusOverride = null) {
   console.log('[SetorService] Movendo pedido para setor:', {
     pedidoId,
     novoSetorId,
@@ -106,7 +106,7 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
   }
   
   // Buscar pedido atual
-  const pedido = await pedidoService.getPedido(pedidoId, tenantId);
+  const pedido = await pedidoService.getPedido(pedidoId);
   if (!pedido) {
     throw new Error('Pedido não encontrado');
   }
@@ -169,7 +169,7 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
       observacoesFluxo
     };
 
-    const pedidoAtualizadoMesmoSetor = await pedidoService.updatePedido(pedidoId, updates, tenantId);
+    const pedidoAtualizadoMesmoSetor = await pedidoService.updatePedido(pedidoId, updates);
 
     console.log('[SetorService] Status/observação atualizados dentro do mesmo setor:', {
       pedidoId,
@@ -271,7 +271,7 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
     // Enviar email de finalização
     try {
       const clienteService = require('./clienteService');
-      const cliente = await clienteService.getCliente(pedido.clienteId, tenantId);
+      const cliente = await clienteService.getCliente(pedido.clienteId);
       
       if (cliente && cliente.email && cliente.nome) {
         await emailService.enviarStatusPedido(
@@ -291,7 +291,7 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
   }
   
   // Atualizar pedido
-  const pedidoAtualizado = await pedidoService.updatePedido(pedidoId, updates, tenantId);
+  const pedidoAtualizado = await pedidoService.updatePedido(pedidoId, updates);
   
   console.log('[SetorService] Pedido movido com sucesso para:', setor.nome);
   
@@ -361,8 +361,8 @@ function validarPermissaoMover(usuario, setorAtual, novoSetor) {
 /**
  * Retorna estatísticas de setores
  */
-async function getEstatisticasSetores(tenantId = null) {
-  const todosPs = await pedidoService.listPedidos(tenantId);
+async function getEstatisticasSetores() {
+  const todosPs = await pedidoService.listPedidos();
   
   const estatisticas = {};
   

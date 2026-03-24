@@ -8,21 +8,15 @@ const DEFAULT_FUNC_LIMIT = 10;
 
 const cache = Object.create(null);
 
-function cacheKey(tenantId, key) {
-  return tenantId ? `${tenantId}:${key}` : key;
-}
-
-function getCached(key, tenantId) {
-  const entryKey = cacheKey(tenantId, key);
-  const entry = cache[entryKey];
+function getCached(key) {
+  const entry = cache[key];
   if (!entry) return null;
   const isFresh = Date.now() - entry.ts < CACHE_TTL_MS;
   return isFresh ? entry.value : null;
 }
 
-function setCache(key, value, tenantId) {
-  const entryKey = cacheKey(tenantId, key);
-  cache[entryKey] = { ts: Date.now(), value };
+function setCache(key, value) {
+  cache[key] = { ts: Date.now(), value };
 }
 
 function isAberto(pedido) {
@@ -35,16 +29,16 @@ function parseData(dateStr) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-async function loadPedidosAbertos(tenantId) {
-  const pedidos = await pedidoService.listPedidos(tenantId);
+async function loadPedidosAbertos() {
+  const pedidos = await pedidoService.listPedidos();
   return pedidos.filter(isAberto);
 }
 
-exports.getDistribuicaoDepartamentos = async (tenantId) => {
-  const cached = getCached('departamentos', tenantId);
+exports.getDistribuicaoDepartamentos = async () => {
+  const cached = getCached('departamentos');
   if (cached) return cached;
 
-  const pedidosAbertos = await loadPedidosAbertos(tenantId);
+  const pedidosAbertos = await loadPedidosAbertos();
   const agregados = new Map();
 
   pedidosAbertos.forEach(pedido => {
@@ -57,18 +51,18 @@ exports.getDistribuicaoDepartamentos = async (tenantId) => {
   });
 
   const resultado = Array.from(agregados.values());
-  setCache('departamentos', resultado, tenantId);
+  setCache('departamentos', resultado);
   return resultado;
 };
 
-exports.getDistribuicaoFuncionarios = async (limit = DEFAULT_FUNC_LIMIT, tenantId) => {
+exports.getDistribuicaoFuncionarios = async (limit = DEFAULT_FUNC_LIMIT) => {
   const parsedLimit = Number(limit) || DEFAULT_FUNC_LIMIT;
   const safeLimit = parsedLimit > 0 ? parsedLimit : DEFAULT_FUNC_LIMIT;
   const cacheKey = `funcionarios-${safeLimit}`;
-  const cached = getCached(cacheKey, tenantId);
+  const cached = getCached(cacheKey);
   if (cached) return cached;
 
-  const pedidosAbertos = await loadPedidosAbertos(tenantId);
+  const pedidosAbertos = await loadPedidosAbertos();
   const agregados = new Map();
 
   pedidosAbertos.forEach(pedido => {
@@ -82,16 +76,16 @@ exports.getDistribuicaoFuncionarios = async (limit = DEFAULT_FUNC_LIMIT, tenantI
     .sort((a, b) => b.total - a.total)
     .slice(0, safeLimit);
 
-  setCache(cacheKey, resultado, tenantId);
+  setCache(cacheKey, resultado);
   return resultado;
 };
 
-exports.getAtrasos = async (tenantId) => {
-  const cached = getCached('atrasos', tenantId);
+exports.getAtrasos = async () => {
+  const cached = getCached('atrasos');
   if (cached) return cached;
 
   const now = Date.now();
-  const pedidosAbertos = await loadPedidosAbertos(tenantId);
+  const pedidosAbertos = await loadPedidosAbertos();
 
   const atrasados = pedidosAbertos
     .map(pedido => ({ pedido, dataPrevista: parseData(pedido.dataPrevistaEntrega) }))
@@ -121,16 +115,16 @@ exports.getAtrasos = async (tenantId) => {
     itens
   };
 
-  setCache('atrasos', resultado, tenantId);
+  setCache('atrasos', resultado);
   return resultado;
 };
 
-exports.getResumo = async (tenantId) => {
-  const cached = getCached('resumo', tenantId);
+exports.getResumo = async () => {
+  const cached = getCached('resumo');
   if (cached) return cached;
 
   const now = Date.now();
-  const pedidos = await pedidoService.listPedidos(tenantId);
+  const pedidos = await pedidoService.listPedidos();
 
   let total = 0;
   let finalizados = 0;
@@ -156,6 +150,6 @@ exports.getResumo = async (tenantId) => {
     atrasados
   };
 
-  setCache('resumo', resultado, tenantId);
+  setCache('resumo', resultado);
   return resultado;
 };

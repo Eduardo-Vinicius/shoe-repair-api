@@ -1,7 +1,7 @@
 const AWS = require('aws-sdk');
 const { v4: uuidv4 } = require('uuid');
 
-const tableName = process.env.DYNAMODB_FUNCIONARIO_TABLE || 'WorqeraFuncionarios';
+const tableName = process.env.DYNAMODB_FUNCIONARIO_TABLE || 'ShoeRepairFuncionarios';
 const dynamoDb = new AWS.DynamoDB.DocumentClient({ region: process.env.AWS_REGION });
 
 function normalizeAtivo(value) {
@@ -9,11 +9,10 @@ function normalizeAtivo(value) {
   return 'true';
 }
 
-exports.createFuncionario = async ({ nome, setorId, email, telefone, cargo, observacoes, ativo = true, tenantId }) => {
+exports.createFuncionario = async ({ nome, setorId, email, telefone, cargo, observacoes, ativo = true }) => {
   const agora = new Date().toISOString();
   const item = {
     id: uuidv4(),
-    tenantId,
     nome,
     setorId,
     email: email || '',
@@ -29,14 +28,12 @@ exports.createFuncionario = async ({ nome, setorId, email, telefone, cargo, obse
   return item;
 };
 
-exports.getFuncionario = async (id, tenantId) => {
+exports.getFuncionario = async (id) => {
   const res = await dynamoDb.get({ TableName: tableName, Key: { id } }).promise();
-  if (!res.Item) return null;
-  if (tenantId && res.Item.tenantId !== tenantId) return null;
   return res.Item;
 };
 
-exports.listFuncionarios = async ({ setorId, ativo = 'true', limit = 200, tenantId } = {}) => {
+exports.listFuncionarios = async ({ setorId, ativo = 'true', limit = 200 } = {}) => {
   const ativos = normalizeAtivo(ativo);
 
   if (setorId) {
@@ -54,12 +51,6 @@ exports.listFuncionarios = async ({ setorId, ativo = 'true', limit = 200, tenant
       },
       Limit: Number(limit) || 200
     };
-
-    if (tenantId) {
-      params.FilterExpression = '#tenantId = :tenantId';
-      params.ExpressionAttributeNames['#tenantId'] = 'tenantId';
-      params.ExpressionAttributeValues[':tenantId'] = tenantId;
-    }
 
     const res = await dynamoDb.query(params).promise();
     return res.Items || [];
@@ -80,12 +71,6 @@ exports.listFuncionarios = async ({ setorId, ativo = 'true', limit = 200, tenant
     filters.push('#ativo = :ativo');
   }
 
-  if (tenantId) {
-    names['#tenantId'] = 'tenantId';
-    values[':tenantId'] = tenantId;
-    filters.push('#tenantId = :tenantId');
-  }
-
   if (filters.length > 0) {
     params.FilterExpression = filters.join(' AND ');
     params.ExpressionAttributeNames = names;
@@ -96,12 +81,12 @@ exports.listFuncionarios = async ({ setorId, ativo = 'true', limit = 200, tenant
   return res.Items || [];
 };
 
-exports.updateFuncionario = async (id, updates, tenantId) => {
+exports.updateFuncionario = async (id, updates) => {
   const allowed = ['nome', 'setorId', 'email', 'telefone', 'cargo', 'observacoes', 'ativo'];
   const entries = Object.entries(updates || {}).filter(([k, v]) => allowed.includes(k) && v !== undefined);
 
   if (entries.length === 0) {
-    return await exports.getFuncionario(id, tenantId);
+    return await exports.getFuncionario(id);
   }
 
   const names = { '#updatedAt': 'updatedAt' };
@@ -120,19 +105,13 @@ exports.updateFuncionario = async (id, updates, tenantId) => {
     UpdateExpression: `SET ${setParts.join(', ')}, #updatedAt = :updatedAt`,
     ExpressionAttributeNames: names,
     ExpressionAttributeValues: values,
-    ConditionExpression: tenantId ? '#tenantId = :tenantId' : undefined,
     ReturnValues: 'ALL_NEW'
   };
-
-  if (tenantId) {
-    params.ExpressionAttributeNames['#tenantId'] = 'tenantId';
-    params.ExpressionAttributeValues[':tenantId'] = tenantId;
-  }
 
   const res = await dynamoDb.update(params).promise();
   return res.Attributes;
 };
 
-exports.softDeleteFuncionario = async (id, tenantId) => {
-  return exports.updateFuncionario(id, { ativo: 'false' }, tenantId);
+exports.softDeleteFuncionario = async (id) => {
+  return exports.updateFuncionario(id, { ativo: 'false' });
 };
