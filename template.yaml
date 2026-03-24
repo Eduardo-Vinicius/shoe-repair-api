@@ -268,3 +268,4 @@ Outputs:
     Value: !GetAtt ShoeRepairHttpApi.ApiEndpoint
     Export:
       Name: ShoeRepairApiUrl
+
