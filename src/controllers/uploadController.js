@@ -68,9 +68,11 @@ exports.uploadFotos = async (req, res) => {
       return res.status(400).json({ error: 'pedidoId é obrigatório no body.' });
     }
 
+    const tenantId = req.tenantId;
+
     // Buscar o clienteId do pedido
     const pedidoService = require('../services/pedidoService');
-    const pedido = await pedidoService.getPedido(pedidoId);
+    const pedido = await pedidoService.getPedido(pedidoId, tenantId);
     if (!pedido) {
       return res.status(404).json({ error: 'Pedido não encontrado.' });
     }
@@ -116,7 +118,7 @@ exports.uploadFotos = async (req, res) => {
     }
 
     // Atualiza o pedido no DynamoDB com as URLs das imagens
-    await pedidoService.updatePedido(pedidoId, { fotos: uploadedUrls });
+    await pedidoService.updatePedido(pedidoId, { fotos: uploadedUrls }, tenantId);
 
     console.log('[UploadController] ✅ Pedido atualizado com URLs das fotos:', {
       pedidoId,

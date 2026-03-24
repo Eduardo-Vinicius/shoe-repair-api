@@ -2,7 +2,7 @@ const metricsService = require('../services/metricsService');
 
 exports.getDistribuicaoDepartamentos = async (req, res) => {
   try {
-    const data = await metricsService.getDistribuicaoDepartamentos();
+    const data = await metricsService.getDistribuicaoDepartamentos(req.tenantId);
     res.status(200).json({ success: true, data });
   } catch (error) {
     console.error('[Metrics] Erro em getDistribuicaoDepartamentos:', error);
@@ -13,7 +13,7 @@ exports.getDistribuicaoDepartamentos = async (req, res) => {
 exports.getDistribuicaoFuncionarios = async (req, res) => {
   try {
     const { limit } = req.query;
-    const data = await metricsService.getDistribuicaoFuncionarios(limit);
+    const data = await metricsService.getDistribuicaoFuncionarios(limit, req.tenantId);
     res.status(200).json({ success: true, data });
   } catch (error) {
     console.error('[Metrics] Erro em getDistribuicaoFuncionarios:', error);
@@ -21,9 +21,9 @@ exports.getDistribuicaoFuncionarios = async (req, res) => {
   }
 };
 
-exports.getAtrasos = async (_req, res) => {
+exports.getAtrasos = async (req, res) => {
   try {
-    const data = await metricsService.getAtrasos();
+    const data = await metricsService.getAtrasos(req.tenantId);
     res.status(200).json({ success: true, data });
   } catch (error) {
     console.error('[Metrics] Erro em getAtrasos:', error);
@@ -31,9 +31,9 @@ exports.getAtrasos = async (_req, res) => {
   }
 };
 
-exports.getResumo = async (_req, res) => {
+exports.getResumo = async (req, res) => {
   try {
-    const data = await metricsService.getResumo();
+    const data = await metricsService.getResumo(req.tenantId);
     res.status(200).json({ success: true, data });
   } catch (error) {
     console.error('[Metrics] Erro em getResumo:', error);

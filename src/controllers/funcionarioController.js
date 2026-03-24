@@ -4,7 +4,7 @@ const setorService = require('../services/setorService');
 exports.listFuncionarios = async (req, res) => {
   try {
     const { setorId, ativo, limit } = req.query || {};
-    const funcionarios = await funcionarioService.listFuncionarios({ setorId, ativo, limit });
+    const funcionarios = await funcionarioService.listFuncionarios({ setorId, ativo, limit, tenantId: req.tenantId });
     res.status(200).json({ success: true, data: funcionarios });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -13,7 +13,7 @@ exports.listFuncionarios = async (req, res) => {
 
 exports.getFuncionario = async (req, res) => {
   try {
-    const funcionario = await funcionarioService.getFuncionario(req.params.id);
+    const funcionario = await funcionarioService.getFuncionario(req.params.id, req.tenantId);
     if (!funcionario) {
       return res.status(404).json({ success: false, error: 'Funcionário não encontrado' });
     }
@@ -36,7 +36,7 @@ exports.createFuncionario = async (req, res) => {
       return res.status(400).json({ success: false, error: 'setorId inválido' });
     }
 
-    const novo = await funcionarioService.createFuncionario({ nome, setorId, email, telefone, cargo, observacoes, ativo });
+    const novo = await funcionarioService.createFuncionario({ nome, setorId, email, telefone, cargo, observacoes, ativo, tenantId: req.tenantId });
     res.status(201).json({ success: true, data: novo });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -54,7 +54,7 @@ exports.updateFuncionario = async (req, res) => {
       }
     }
 
-    const atualizado = await funcionarioService.updateFuncionario(req.params.id, updates);
+    const atualizado = await funcionarioService.updateFuncionario(req.params.id, updates, req.tenantId);
     if (!atualizado) {
       return res.status(404).json({ success: false, error: 'Funcionário não encontrado' });
     }
@@ -67,7 +67,7 @@ exports.updateFuncionario = async (req, res) => {
 
 exports.deleteFuncionario = async (req, res) => {
   try {
-    const deletado = await funcionarioService.softDeleteFuncionario(req.params.id);
+    const deletado = await funcionarioService.softDeleteFuncionario(req.params.id, req.tenantId);
     if (!deletado) {
       return res.status(404).json({ success: false, error: 'Funcionário não encontrado' });
     }

@@ -14,7 +14,7 @@ exports.getDashboard = async (req, res) => {
     }
 
     // Buscar dados do dashboard
-    const dashboardData = await dashboardService.getDashboardData(userId);
+    const dashboardData = await dashboardService.getDashboardData(userId, req.tenantId);
 
     res.status(200).json(dashboardData);
   } catch (error) {

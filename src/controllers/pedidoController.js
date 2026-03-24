@@ -172,7 +172,7 @@ function assinarFotosPedido(pedido) {
  * Função auxiliar para enviar notificações de pedido
  * Centraliza a lógica de envio de email e SMS
  */
-async function enviarNotificacoesPedido(pedido, status = null) {
+async function enviarNotificacoesPedido(pedido, status = null, tenantId = null) {
   try {
     console.log('[Notificações] 🔔 Iniciando envio de notificações:', {
       pedidoId: pedido.id,
@@ -186,7 +186,7 @@ async function enviarNotificacoesPedido(pedido, status = null) {
       return;
     }
 
-    const cliente = await clienteService.getCliente(pedido.clienteId);
+    const cliente = await clienteService.getCliente(pedido.clienteId, tenantId);
     if (!cliente) {
       console.log('[Notificações] ❌ Cliente não encontrado:', pedido.clienteId);
       return;
@@ -254,7 +254,8 @@ async function enviarNotificacoesPedido(pedido, status = null) {
 exports.listPedidosStatus = async (req, res) => {
   try {
     const { role, sub: userId } = req.user || {};
-    let pedidos = await pedidoService.listPedidos();
+    const tenantId = req.tenantId;
+    let pedidos = await pedidoService.listPedidos(tenantId);
 
     // Filtro opcional por funcionário (atual ou histórico)
     const funcionarioFiltro = (req.query?.funcionario || '').trim().toLowerCase();
@@ -348,7 +349,8 @@ exports.listPedidosStatus = async (req, res) => {
 
 exports.listPedidos = async (req, res) => {
   try {
-    let pedidos = await pedidoService.listPedidos();
+    const tenantId = req.tenantId;
+    let pedidos = await pedidoService.listPedidos(tenantId);
 
     const funcionarioFiltro = (req.query?.funcionario || '').trim().toLowerCase();
     if (funcionarioFiltro) {
@@ -401,7 +403,8 @@ exports.searchPedidosConsulta = async (req, res) => {
       dataInicio,
       dataFim,
       limit,
-      exclusiveStartKey
+      exclusiveStartKey,
+      tenantId: req.tenantId
     });
 
     const nextToken = result.lastKey
@@ -424,7 +427,7 @@ exports.searchPedidosConsulta = async (req, res) => {
 
 exports.getPedido = async (req, res) => {
   try {
-    const pedido = await pedidoService.getPedido(req.params.id);
+    const pedido = await pedidoService.getPedido(req.params.id, req.tenantId);
     if (!pedido) return res.status(404).json({ error: 'Pedido não encontrado' });
     res.status(200).json(assinarFotosPedido(pedido));
   } catch (err) {
@@ -591,10 +594,10 @@ exports.createPedido = async (req, res) => {
       // Mantém setores vazios se houver erro na determinação
     }
 
-    const novoPedido = await pedidoService.createPedido(dadosPedido);
+    const novoPedido = await pedidoService.createPedido(dadosPedido, req.tenantId);
     
     // Enviar notificações (não bloqueia se falhar)
-    await enviarNotificacoesPedido(novoPedido, statusInicial);
+    await enviarNotificacoesPedido(novoPedido, statusInicial, req.tenantId);
     
     res.status(201).json({
       success: true,
@@ -624,7 +627,7 @@ exports.updatePedido = async (req, res) => {
       updates.status = statusNormalizado.value;
     }
 
-    const atualizado = await pedidoService.updatePedido(req.params.id, updates);
+    const atualizado = await pedidoService.updatePedido(req.params.id, updates, req.tenantId);
     if (!atualizado) return res.status(404).json({ error: 'Pedido não encontrado' });
     res.status(200).json(assinarFotosPedido(atualizado));
   } catch (err) {
@@ -663,7 +666,7 @@ exports.patchPedido = async (req, res) => {
 
     // Buscar pedido atual para validações
     console.log('[PedidoController] Buscando pedido atual...');
-    const pedidoAtual = await pedidoService.getPedido(pedidoId);
+    const pedidoAtual = await pedidoService.getPedido(pedidoId, req.tenantId);
     if (!pedidoAtual) {
       console.log('[PedidoController] Pedido não encontrado:', pedidoId);
       return res.status(404).json({ 
@@ -801,7 +804,7 @@ exports.patchPedido = async (req, res) => {
     console.log('[PedidoController] Executando atualização no banco:', updatesPermitidos);
 
     // Executar atualização
-    const pedidoAtualizado = await pedidoService.updatePedido(pedidoId, updatesPermitidos);
+    const pedidoAtualizado = await pedidoService.updatePedido(pedidoId, updatesPermitidos, req.tenantId);
 
     console.log('[PedidoController] Pedido atualizado com sucesso:', {
       id: pedidoAtualizado.id,
@@ -810,7 +813,7 @@ exports.patchPedido = async (req, res) => {
 
     // Se o status foi alterado, enviar notificações
     if (updatesPermitidos.status && updatesPermitidos.status !== pedidoAtual.status) {
-      await enviarNotificacoesPedido(pedidoAtualizado, updatesPermitidos.status);
+      await enviarNotificacoesPedido(pedidoAtualizado, updatesPermitidos.status, req.tenantId);
     }
 
     res.status(200).json({
@@ -834,7 +837,7 @@ exports.patchPedido = async (req, res) => {
 
 exports.deletePedido = async (req, res) => {
   try {
-    const deletado = await pedidoService.deletePedido(req.params.id);
+    const deletado = await pedidoService.deletePedido(req.params.id, req.tenantId);
     if (!deletado) return res.status(404).json({ error: 'Pedido não encontrado' });
     res.status(200).json({ deleted: true });
   } catch (err) {
@@ -871,7 +874,7 @@ exports.updatePedidoStatus = async (req, res) => {
     }
 
     // Buscar pedido atual para pegar o histórico
-    const pedidoAtual = await pedidoService.getPedido(req.params.id);
+    const pedidoAtual = await pedidoService.getPedido(req.params.id, req.tenantId);
     if (!pedidoAtual) {
       return res.status(404).json({ 
         success: false, 
@@ -913,11 +916,12 @@ exports.updatePedidoStatus = async (req, res) => {
         usuario,
         req.body?.funcionarioNome,
         req.body?.observacao,
-        novoStatus
+        novoStatus,
+        req.tenantId
       );
 
       if (!pedidoMovido?._noMovement) {
-        await enviarNotificacoesPedido(pedidoMovido, pedidoMovido.status || novoStatus);
+        await enviarNotificacoesPedido(pedidoMovido, pedidoMovido.status || novoStatus, req.tenantId);
       }
 
       const pedidoResposta = assinarFotosPedido(pedidoMovido);
@@ -966,10 +970,10 @@ exports.updatePedidoStatus = async (req, res) => {
       updatedAt: new Date().toISOString()
     };
 
-    const atualizado = await pedidoService.updatePedido(req.params.id, updates);
+    const atualizado = await pedidoService.updatePedido(req.params.id, updates, req.tenantId);
 
     // Enviar notificações
-    await enviarNotificacoesPedido(atualizado, novoStatus);
+    await enviarNotificacoesPedido(atualizado, novoStatus, req.tenantId);
 
     const pedidoResposta = assinarFotosPedido(atualizado);
 
@@ -1028,7 +1032,7 @@ exports.generatePedidoPdf = async (req, res) => {
     // Tentar primeiro o PDF completo
     let pdfResult;
     try {
-      pdfResult = await pdfService.generatePedidoPdf(pedidoId);
+      pdfResult = await pdfService.generatePedidoPdf(pedidoId, req.tenantId);
       console.log('PDF complexo gerado com sucesso');
     } catch (complexError) {
       console.error('Erro no PDF complexo, tentando versão simplificada:', complexError.message);
@@ -1037,7 +1041,7 @@ exports.generatePedidoPdf = async (req, res) => {
       let clienteId = 'unknown';
       try {
         const pedidoService = require('../services/pedidoService');
-        const pedido = await pedidoService.getPedido(pedidoId);
+        const pedido = await pedidoService.getPedido(pedidoId, req.tenantId);
         if (pedido && pedido.clienteId) {
           clienteId = pedido.clienteId;
         }
@@ -1109,7 +1113,7 @@ exports.listPedidoPdfs = async (req, res) => {
 
     // Buscar dados do pedido para obter clienteId
     const pedidoService = require('../services/pedidoService');
-    const pedido = await pedidoService.getPedido(pedidoId);
+    const pedido = await pedidoService.getPedido(pedidoId, req.tenantId);
     
     if (!pedido) {
       return res.status(404).json({
@@ -1182,7 +1186,7 @@ exports.enviarPdfWhatsApp = async (req, res) => {
     }
 
     // Buscar pedido
-    const pedido = await pedidoService.getPedido(pedidoId);
+    const pedido = await pedidoService.getPedido(pedidoId, req.tenantId);
     if (!pedido) {
       return res.status(404).json({
         success: false,
@@ -1241,7 +1245,7 @@ exports.enviarDetalhesWhatsApp = async (req, res) => {
     }
 
     // Buscar pedido
-    const pedido = await pedidoService.getPedido(pedidoId);
+    const pedido = await pedidoService.getPedido(pedidoId, req.tenantId);
     if (!pedido) {
       return res.status(404).json({
         success: false,
@@ -1250,7 +1254,7 @@ exports.enviarDetalhesWhatsApp = async (req, res) => {
     }
 
     // Buscar cliente
-    const cliente = await clienteService.getCliente(pedido.clienteId);
+    const cliente = await clienteService.getCliente(pedido.clienteId, req.tenantId);
     if (!cliente) {
       return res.status(404).json({
         success: false,
@@ -1348,7 +1352,8 @@ exports.moverParaSetor = async (req, res) => {
       usuario, 
       funcionarioNome, 
       observacao,
-      status
+      status,
+      req.tenantId
     );
 
     if (pedidoAtualizado?._noMovement) {
@@ -1364,7 +1369,7 @@ exports.moverParaSetor = async (req, res) => {
     const setor = setores.find(s => s.id === setorIdResolvido);
     const nomeSetor = setor ? setor.nome : setorIdResolvido;
     const statusTexto = pedidoAtualizado?.status || `Em produção - ${nomeSetor}`;
-    await enviarNotificacoesPedido(pedidoAtualizado, statusTexto);
+    await enviarNotificacoesPedido(pedidoAtualizado, statusTexto, req.tenantId);
 
     res.status(200).json({
       success: true,
@@ -1388,7 +1393,7 @@ exports.moverParaSetor = async (req, res) => {
 exports.getProximoSetor = async (req, res) => {
   try {
     const pedidoId = req.params.id;
-    const pedido = await pedidoService.getPedido(pedidoId);
+    const pedido = await pedidoService.getPedido(pedidoId, req.tenantId);
 
     if (!pedido) {
       return res.status(404).json({
@@ -1432,7 +1437,7 @@ exports.downloadPedidoFotosZip = async (req, res) => {
       });
     }
 
-    const pedido = await pedidoService.getPedido(pedidoId);
+    const pedido = await pedidoService.getPedido(pedidoId, req.tenantId);
     if (!pedido) {
       return res.status(404).json({
         success: false,

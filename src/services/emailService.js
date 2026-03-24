@@ -676,7 +676,7 @@ async function enviarSMSStatus(telefoneCliente, nomeCliente, status, codigoPedid
         },
         'AWS.SNS.SMS.SenderID': {
           DataType: 'String',
-          StringValue: process.env.SMS_SENDER_ID || 'ShoeRepair' // Nome que aparece (nem todos países suportam)
+          StringValue: process.env.SMS_SENDER_ID || 'Worqera' // Nome que aparece (nem todos países suportam)
         }
       }
     };

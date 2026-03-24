@@ -11,7 +11,7 @@ Resources:
   ShoeRepairApiFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: ShoeRepairApiFunction
+      FunctionName: WorqeraApiFunction
       Handler: handler.handler
       Runtime: nodejs18.x
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -28,6 +28,7 @@ Resources:
           S3_BUCKET_NAME: !Ref ShoeRepairFotosBucket
           DYNAMODB_USER_TABLE: !Ref ShoeRepairUsersTable
           DYNAMODB_FUNCIONARIO_TABLE: !Ref ShoeRepairFuncionariosTable
+          DYNAMODB_TENANT_TABLE: !Ref ShoeRepairTenantsTable
           JWT_SECRET: !Ref JWTSecret
           REFRESH_SECRET: !Ref RefreshSecret
           JWT_EXPIRES: !Ref JWTExpires
@@ -39,34 +40,34 @@ Resources:
   JWTSecret:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /shoe-repair-api/jwt-secret
+      Name: /worqera-api/jwt-secret
       Type: String
       Value: 2b1e7c7e-8e2a-4c3a-9f7d-7e8b2e1c9f3a
 
   RefreshSecret:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /shoe-repair-api/refresh-secret
+      Name: /worqera-api/refresh-secret
       Type: String
       Value: 7e4d2c1b-3a9f-4e8b-8c2a-1f7d2e3b4c5a
 
   JWTExpires:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /shoe-repair-api/jwt-expires
+      Name: /worqera-api/jwt-expires
       Type: String
       Value: 10h
 
   RefreshExpires:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /shoe-repair-api/refresh-expires
+      Name: /worqera-api/refresh-expires
       Type: String
       Value: 7d
   ShoeRepairFotosBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'shoe-repair-fotos-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'worqera-fotos-${AWS::AccountId}-${AWS::Region}'
       CorsConfiguration:
         CorsRules:
           - AllowedHeaders:
@@ -128,7 +129,7 @@ Resources:
   ShoeRepairClientesTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: ShoeRepairClientes
+      TableName: WorqeraClientes
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
@@ -139,7 +140,7 @@ Resources:
   ShoeRepairUsersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: ShoeRepairUsers
+      TableName: WorqeraUsers
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
@@ -159,7 +160,7 @@ Resources:
   ShoeRepairPedidosTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: ShoeRepairPedidos
+      TableName: WorqeraPedidos
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
@@ -170,7 +171,7 @@ Resources:
   ShoeRepairCountersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: ShoeRepairCounters
+      TableName: WorqeraCounters
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
@@ -181,7 +182,7 @@ Resources:
   ShoeRepairFuncionariosTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: ShoeRepairFuncionarios
+      TableName: WorqeraFuncionarios
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
@@ -202,12 +203,23 @@ Resources:
           Projection:
             ProjectionType: ALL
       BillingMode: PAY_PER_REQUEST
+  ShoeRepairTenantsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: WorqeraTenants
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
   # API Gateway HTTP API (v2) - Melhor suporte a CORS
 
   ShoeRepairHttpApi:
     Type: AWS::ApiGatewayV2::Api
     Properties:
-      Name: ShoeRepairHttpApi
+      Name: WorqeraHttpApi
       ProtocolType: HTTP
       CorsConfiguration:
         AllowOrigins:
@@ -267,4 +279,4 @@ Outputs:
     Description: "URL da API HTTP Gateway"
     Value: !GetAtt ShoeRepairHttpApi.ApiEndpoint
     Export:
-      Name: ShoeRepairApiUrl
+      Name: WorqeraApiUrl
