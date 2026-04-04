@@ -1,6 +1,7 @@
 const AWS = require('aws-sdk');
 const nodemailer = require("nodemailer");
 const { ORDER_STATUS, normalizeStatus, isFinalStatus } = require('../utils/orderStatus');
+const emailLogModel = require('../models/emailLogModel');
 
 const s3 = new AWS.S3();
 const PRESIGNED_URL_EXPIRES_SECONDS = Number(process.env.S3_PRESIGNED_EXPIRES_SECONDS || 3600);
@@ -566,6 +567,19 @@ async function enviarStatusPedido(emailCliente, nomeCliente, status, descricaoSe
     console.warn('[Email] ❌ Gmail não configurado - variáveis GMAIL_USER ou GMAIL_APP_PASSWORD não definidas');
     auditLog.resultado = 'ERRO_CONFIG_GMAIL';
     console.warn('[Email] 📋 AUDITORIA:', auditLog);
+    
+    // Log de falha de configuração
+    await emailLogModel.criarLogEmail({
+      codigoPedido,
+      emailCliente,
+      nomeCliente,
+      assunto: '[Sistema] Falha de Configuração',
+      tipo: 'status_update',
+      status: 'falha_config',
+      mensagem: 'Gmail não configurado - GMAIL_USER ou GMAIL_APP_PASSWORD não definidos',
+      errorCode: 'GMAIL_NOT_CONFIGURED'
+    }).catch(err => console.warn('[Email] Aviso: Log de config não foi persistido:', err.message));
+    
     return;
   }
 
@@ -574,6 +588,19 @@ async function enviarStatusPedido(emailCliente, nomeCliente, status, descricaoSe
     console.warn('[Email] ❌ Email do cliente inválido:', emailCliente);
     auditLog.resultado = 'ERRO_EMAIL_INVALIDO';
     console.warn('[Email] 📋 AUDITORIA:', auditLog);
+    
+    // Log de email inválido
+    await emailLogModel.criarLogEmail({
+      codigoPedido,
+      emailCliente: emailCliente || 'invalido@invalido.com',
+      nomeCliente,
+      assunto: '[Sistema] Email Inválido',
+      tipo: 'status_update',
+      status: 'erro',
+      mensagem: `Email do cliente inválido: ${emailCliente}`,
+      errorCode: 'INVALID_EMAIL'
+    }).catch(err => console.warn('[Email] Aviso: Log de email inválido não foi persistido:', err.message));
+    
     return;
   }
 
@@ -612,6 +639,20 @@ async function enviarStatusPedido(emailCliente, nomeCliente, status, descricaoSe
       duracaoMs: duration
     };
     console.log('[Email] 📋 AUDITORIA:', auditSuccessLog);
+    
+    // Persistir log de email no banco
+    await emailLogModel.criarLogEmail({
+      codigoPedido,
+      emailCliente,
+      nomeCliente: nomeCliente || 'Desconhecido',
+      assunto: subject || `Atualização do Pedido #${codigoPedido}`,
+      tipo: 'status_update',
+      status: 'sucesso',
+      mensagem: 'Email enviado com sucesso via Gmail',
+      duracaoMs: duration,
+      messageId: result.messageId
+    }).catch(err => console.warn('[Email] Aviso: Log não foi persistido:', err.message));
+    
     console.log('[Email] ✅ Email enviado com sucesso via Gmail!', {
       emailCliente,
       nomeCliente,
@@ -635,6 +676,20 @@ async function enviarStatusPedido(emailCliente, nomeCliente, status, descricaoSe
       errorCode: err.code
     };
     console.error('[Email] 📋 AUDITORIA:', auditErrorLog);
+    
+    // Persistir log de falha no banco
+    await emailLogModel.criarLogEmail({
+      codigoPedido,
+      emailCliente,
+      nomeCliente: nomeCliente || 'Desconhecido',
+      assunto: subject || `Atualização do Pedido #${codigoPedido}`,
+      tipo: 'status_update',
+      status: 'erro',
+      mensagem: `Erro ao enviar email: ${err.message}`,
+      errorCode: err.code,
+      duracaoMs: Date.now() - startTime
+    }).catch(errLog => console.warn('[Email] Aviso: Log de erro não foi persistido:', errLog.message));
+    
     console.error('[Email] ❌ Erro ao enviar email:', {
       emailCliente,
       nomeCliente,
@@ -830,6 +885,23 @@ async function enviarEmailComPdfNovorecebimento(emailCliente, nomeCliente, pedid
       tamanhoPdf: pdfBuffer?.length || 0
     };
     console.log('[Email] 📋 AUDITORIA:', auditLog);
+    
+    // Persistir log de novo pedido no banco
+    await emailLogModel.criarLogEmail({
+      pedidoId: pedido?.id,
+      codigoPedido,
+      emailCliente,
+      nomeCliente,
+      assunto: subject || `✅ Pedido #${codigoPedido} - Confirmação de Recebimento`,
+      tipo: 'novo_pedido',
+      status: 'sucesso',
+      mensagem: 'Email de novo pedido enviado com sucesso via Gmail',
+      duracaoMs: duration,
+      temPdf: !!pdfBuffer,
+      tamanhoPdf: pdfBuffer?.length || 0,
+      messageId: result.messageId
+    }).catch(err => console.warn('[Email] Aviso: Log de novo pedido não foi persistido:', err.message));
+    
     console.log('[Email] ✅ Email de novo pedido enviado com sucesso!', {
       emailCliente,
       nomeCliente,
@@ -852,6 +924,20 @@ async function enviarEmailComPdfNovorecebimento(emailCliente, nomeCliente, pedid
       errorCode: err.code
     };
     console.error('[Email] 📋 AUDITORIA:', auditLog);
+    
+    // Persistir log de falha no banco
+    await emailLogModel.criarLogEmail({
+      pedidoId: pedido?.id,
+      codigoPedido: pedido?.codigo || pedido?.id,
+      emailCliente,
+      nomeCliente,
+      assunto: `[ERRO] Pedido ${pedido?.codigo || pedido?.id} - Email não enviado`,
+      tipo: 'novo_pedido',
+      status: 'erro',
+      mensagem: `Erro ao enviar email de novo pedido: ${err.message}`,
+      errorCode: err.code
+    }).catch(errLog => console.warn('[Email] Aviso: Log de erro de novo pedido não foi persistido:', errLog.message));
+    
     console.error('[Email] ❌ Erro ao enviar email com PDF:', {
       emailCliente,
       nomeCliente,
