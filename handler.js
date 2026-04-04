@@ -12,7 +12,7 @@ const dashboardRoutes = require('./src/routes/dashboardRoutes');
 const setorRoutes = require('./src/routes/setorRoutes');
 const funcionarioRoutes = require('./src/routes/funcionarioRoutes');
 const metricsRoutes = require('./src/routes/metricsRoutes');
-const emailRoutes = require('./src/routes/emailRoutes');
+// const emailRoutes = require('./src/routes/emailRoutes'); // TODO: habilitar futuramente
 
 const app = express();
 
@@ -53,7 +53,7 @@ app.use('/dashboard', dashboardRoutes);
 app.use('/setores', setorRoutes);
 app.use('/funcionarios', funcionarioRoutes);
 app.use('/metrics', metricsRoutes);
-app.use('/emails', emailRoutes);
+// app.use('/emails', emailRoutes); // TODO: habilitar futuramente
 
 app.get('/', (req, res) => {
   console.log('[Handler] Requisição recebida na rota raiz');
