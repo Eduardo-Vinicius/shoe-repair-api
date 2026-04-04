@@ -548,26 +548,32 @@ async function enviarEmail(to, subject, order, status) {
  * @param {string} codigoPedido - Código do pedido
  */
 async function enviarStatusPedido(emailCliente, nomeCliente, status, descricaoServicos, modeloTenis, codigoPedido = 'N/A', fotos = []) {
-  console.log('[Email] Iniciando envio de email de status do pedido:', {
+  // 📋 AUDITORIA: Log estruturado para rastrear envios de email
+  const auditLog = {
+    timestamp: new Date().toISOString(),
+    operacao: 'enviarStatusPedido',
+    codigoPedido,
     emailCliente,
     nomeCliente,
     status,
-    descricaoServicos,
-    modeloTenis,
-    codigoPedido,
-    fotosCount: fotos?.length || 0,
-    timestamp: new Date().toISOString()
-  });
+    fotosCount: fotos?.length || 0
+  };
+  
+  console.log('[Email] 📧 AUDITORIA: Iniciando envio de email de status', auditLog);
 
   // Validação das configurações GMAIL
   if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
-    console.warn('[Email] Gmail não configurado - variáveis GMAIL_USER ou GMAIL_APP_PASSWORD não definidas');
+    console.warn('[Email] ❌ Gmail não configurado - variáveis GMAIL_USER ou GMAIL_APP_PASSWORD não definidas');
+    auditLog.resultado = 'ERRO_CONFIG_GMAIL';
+    console.warn('[Email] 📋 AUDITORIA:', auditLog);
     return;
   }
 
   // Validação do email do cliente
   if (!emailCliente || !emailCliente.includes('@')) {
-    console.warn('[Email] Email do cliente inválido:', emailCliente);
+    console.warn('[Email] ❌ Email do cliente inválido:', emailCliente);
+    auditLog.resultado = 'ERRO_EMAIL_INVALIDO';
+    console.warn('[Email] 📋 AUDITORIA:', auditLog);
     return;
   }
 
@@ -594,6 +600,18 @@ async function enviarStatusPedido(emailCliente, nomeCliente, status, descricaoSe
     const result = await transporter.sendMail(mailOptions);
     const duration = Date.now() - startTime;
 
+    // ✅ SUCESSO: Log estruturado de auditoria
+    const auditSuccessLog = {
+      timestamp: new Date().toISOString(),
+      operacao: 'enviarStatusPedido',
+      codigoPedido,
+      emailCliente,
+      status,
+      resultado: 'SUCESSO',
+      messageId: result.messageId,
+      duracaoMs: duration
+    };
+    console.log('[Email] 📋 AUDITORIA:', auditSuccessLog);
     console.log('[Email] ✅ Email enviado com sucesso via Gmail!', {
       emailCliente,
       nomeCliente,
@@ -605,6 +623,18 @@ async function enviarStatusPedido(emailCliente, nomeCliente, status, descricaoSe
 
     return result;
   } catch (err) {
+    // ❌ ERRO: Log estruturado de auditoria
+    const auditErrorLog = {
+      timestamp: new Date().toISOString(),
+      operacao: 'enviarStatusPedido',
+      codigoPedido,
+      emailCliente,
+      status,
+      resultado: 'ERRO',
+      errorMessage: err.message,
+      errorCode: err.code
+    };
+    console.error('[Email] 📋 AUDITORIA:', auditErrorLog);
     console.error('[Email] ❌ Erro ao enviar email:', {
       emailCliente,
       nomeCliente,
@@ -708,9 +738,139 @@ async function enviarSMSStatus(telefoneCliente, nomeCliente, status, codigoPedid
   }
 }
 
+/**
+ * Envia email de confirmação de pedido com PDF em anexo (para novos pedidos)
+ * @param {string} emailCliente - Email do cliente
+ * @param {string} nomeCliente - Nome do cliente
+ * @param {object} pedido - Dados completos do pedido
+ * @param {Buffer} pdfBuffer - Buffer do PDF gerado (opcional)
+ * @returns {Promise<boolean>}
+ */
+async function enviarEmailComPdfNovorecebimento(emailCliente, nomeCliente, pedido, pdfBuffer = null) {
+  console.log('[Email] 📧 Enviando email de NOVO PEDIDO com PDF:', {
+    emailCliente,
+    nomeCliente,
+    pedidoId: pedido?.id,
+    codigoPedido: pedido?.codigo,
+    temPdf: !!pdfBuffer,
+    tamanhoPdf: pdfBuffer?.length || 0,
+    timestamp: new Date().toISOString()
+  });
+
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+    console.warn('[Email] ❌ Gmail não configurado');
+    return false;
+  }
+
+  if (!emailCliente || !emailCliente.includes('@')) {
+    console.warn('[Email] ❌ Email do cliente inválido:', emailCliente);
+    return false;
+  }
+
+  try {
+    // Gerar conteúdo do email
+    const servicosTexto = pedido?.descricaoServicos || 
+                         (pedido?.servicos?.map(s => s.nome).join(', ') || 'Serviços diversos');
+    const modeloTenis = pedido?.modeloTenis || 'Tênis';
+    const codigoPedido = pedido?.codigo || pedido?.id || 'N/A';
+    const fotos = pedido?.fotos || [];
+
+    const { subject, html, text } = gerarConteudoEmail(
+      nomeCliente,
+      'Criado',
+      servicosTexto,
+      modeloTenis,
+      codigoPedido,
+      fotos
+    );
+
+    // Montar opções do email com anexo PDF (se disponível)
+    const mailOptions = {
+      from: `"Shoe Repair" <${process.env.GMAIL_USER}>`,
+      to: emailCliente,
+      subject: subject,
+      text: text,
+      html: html,
+      replyTo: process.env.GMAIL_USER
+    };
+
+    // Anexar PDF se disponível
+    if (pdfBuffer && Buffer.isBuffer(pdfBuffer)) {
+      mailOptions.attachments = [
+        {
+          filename: `pedido-${codigoPedido}.pdf`,
+          content: pdfBuffer,
+          contentType: 'application/pdf'
+        }
+      ];
+      console.log('[Email] 📎 PDF anexado ao email:', {
+        filename: `pedido-${codigoPedido}.pdf`,
+        tamanho: pdfBuffer.length,
+        bytes: pdfBuffer.length
+      });
+    } else {
+      console.log('[Email] ⚠️ PDF não disponível para anexar - será enviado só email');
+    }
+
+    // Enviar email
+    const startTime = Date.now();
+    const result = await transporter.sendMail(mailOptions);
+    const duration = Date.now() - startTime;
+
+    // ✅ Log de auditoria de sucesso
+    const auditLog = {
+      timestamp: new Date().toISOString(),
+      operacao: 'enviarEmailComPdfNovorecebimento',
+      codigoPedido,
+      emailCliente,
+      resultado: 'SUCESSO',
+      messageId: result.messageId,
+      duracaoMs: duration,
+      temPdf: !!pdfBuffer,
+      tamanhoPdf: pdfBuffer?.length || 0
+    };
+    console.log('[Email] 📋 AUDITORIA:', auditLog);
+    console.log('[Email] ✅ Email de novo pedido enviado com sucesso!', {
+      emailCliente,
+      nomeCliente,
+      codigoPedido,
+      messageId: result.messageId,
+      duracaoMs: duration,
+      temPdf: !!pdfBuffer
+    });
+
+    return true;
+  } catch (err) {
+    // ❌ Log de auditoria de erro
+    const auditLog = {
+      timestamp: new Date().toISOString(),
+      operacao: 'enviarEmailComPdfNovorecebimento',
+      codigoPedido: pedido?.codigo || pedido?.id,
+      emailCliente,
+      resultado: 'ERRO',
+      errorMessage: err.message,
+      errorCode: err.code
+    };
+    console.error('[Email] 📋 AUDITORIA:', auditLog);
+    console.error('[Email] ❌ Erro ao enviar email com PDF:', {
+      emailCliente,
+      nomeCliente,
+      codigoPedido: pedido?.codigo,
+      errorMessage: err.message,
+      errorCode: err.code,
+      stack: err.stack,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Não lança o erro para não quebrar o fluxo principal
+    return false;
+  }
+}
+
 module.exports = {
   enviarStatusPedido,
   enviarEmail,
+  enviarEmailComPdfNovorecebimento,
   enviarSMSStatus, // Função de SMS via AWS SNS
   gerarConteudoEmail
 };

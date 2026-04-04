@@ -1,6 +1,7 @@
 const AWS = require('aws-sdk');
 const { v4: uuidv4 } = require('uuid');
-const { enviarEmail } = require("./emailService");
+const { enviarEmail, enviarEmailComPdfNovorecebimento } = require("./emailService");
+const pdfService = require("./pdfService");
 const { getCliente } = require('./clienteService');
 const { ORDER_STATUS } = require('../utils/orderStatus');
 const tableName = process.env.DYNAMODB_PEDIDO_TABLE || 'shoeRepairPedidos';
@@ -132,26 +133,45 @@ exports.createPedido = async (pedido) => {
   const params = { TableName: tableName, Item: novoPedido };
   await dynamoDb.put(params).promise();
 
-  // Enviar e-mail após criar o pedido
-    try {
-      const cliente = await getCliente(novoPedido.clienteId);
-      const subject = `✅ Pedido #${codigoPedido} - Confirmação de Recebimento`;
-  
-      const emailCliente = (cliente && cliente.email) ? String(cliente.email).trim() : null;
-  
-      if (!emailCliente) {
-        console.warn('[PedidoService] Nenhum e-mail encontrado no cadastro do cliente. E-mail não enviado.', {
-          clienteId: novoPedido.clienteId,
-          codigo: codigoPedido
-        });
-      } else {
-        await enviarEmail(emailCliente, subject, novoPedido, 'Criado');
-        console.log(`[PedidoService] E-mail enviado para ${emailCliente} com sucesso.`);
+  // Enviar e-mail com PDF após criar o pedido
+  try {
+    const cliente = await getCliente(novoPedido.clienteId);
+    const emailCliente = (cliente && cliente.email) ? String(cliente.email).trim() : null;
+
+    if (!emailCliente) {
+      console.warn('[PedidoService] Nenhum e-mail encontrado no cadastro do cliente. E-mail não enviado.', {
+        clienteId: novoPedido.clienteId,
+        codigo: codigoPedido
+      });
+    } else {
+      // Gerar PDF do pedido
+      let pdfBuffer = null;
+      try {
+        console.log('[PedidoService] Gerando PDF do pedido para anexo:', codigoPedido);
+        const pdfResult = await pdfService.generatePedidoPdf(novoPedido.id);
+        pdfBuffer = pdfResult?.buffer || null;
+        
+        if (pdfBuffer) {
+          console.log('[PedidoService] ✅ PDF gerado com sucesso, tamanho:', pdfBuffer.length, 'bytes');
+        } else {
+          console.warn('[PedidoService] ⚠️ PDF não foi gerado (retornou vazio)');
+        }
+      } catch (pdfError) {
+        console.error('[PedidoService] ❌ Erro ao gerar PDF (continuando sem PDF):', pdfError.message);
+        // Não falha - vai enviar email sem PDF
       }
-    } catch (error) {
-      console.error('[PedidoService] Erro ao buscar cliente e/ou enviar e-mail de confirmação:', error.message);
+
+      // Enviar email com PDF (se disponível)
+      const nomeClienteFormatado = cliente?.nome || cliente?.nomeCliente || novoPedido.clientName || 'Cliente';
+      await enviarEmailComPdfNovorecebimento(emailCliente, nomeClienteFormatado, novoPedido, pdfBuffer);
+      
+      console.log(`[PedidoService] ✅ E-mail de novo pedido enviado para ${emailCliente}${pdfBuffer ? ' COM PDF' : ' SEM PDF'}.`);
     }
-  
+  } catch (error) {
+    console.error('[PedidoService] ❌ Erro ao buscar cliente e/ou enviar e-mail de confirmação:', error.message);
+    // Não falha - o pedido foi criado com sucesso
+  }
+
     return novoPedido;
 };
 

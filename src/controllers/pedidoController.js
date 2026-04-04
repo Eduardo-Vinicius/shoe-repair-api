@@ -174,12 +174,23 @@ function assinarFotosPedido(pedido) {
  */
 async function enviarNotificacoesPedido(pedido, status = null) {
   try {
+    // ✅ VALIDAÇÃO CRÍTICA: Email APENAS se setor atual é 'atendimento-final'
     console.log('[Notificações] 🔔 Iniciando envio de notificações:', {
       pedidoId: pedido.id,
       codigo: pedido.codigo,
+      setorAtual: pedido.setorAtual,
       status: status || pedido.status,
       clienteId: pedido.clienteId
     });
+
+    // NÃO enviar notificações se o setor não for 'atendimento-final'
+    if (pedido.setorAtual !== 'atendimento-final') {
+      console.log('[Notificações] ⏭️ Email NÃO enviado - pedido ainda não chegou em atendimento-final', {
+        setorAtual: pedido.setorAtual,
+        status: status || pedido.status
+      });
+      return;
+    }
 
     if (!pedido.clienteId) {
       console.log('[Notificações] ❌ ClienteId não encontrado no pedido');

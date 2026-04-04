@@ -7,6 +7,10 @@ Parameters:
   LambdaS3Key:
     Type: String
     Description: S3 key for Lambda code zip
+  ResourceSuffix:
+    Type: String
+    Default: ''
+    Description: Optional suffix to make resource names unique per environment
 Resources:
   ShoeRepairApiFunction:
     Type: AWS::Lambda::Function
@@ -66,7 +70,7 @@ Resources:
   ShoeRepairFotosBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'shoe-repair-fotos-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'shoe-repair-fotos-${AWS::AccountId}-${AWS::Region}${ResourceSuffix}'
       CorsConfiguration:
         CorsRules:
           - AllowedHeaders:
@@ -128,7 +132,7 @@ Resources:
   ShoeRepairClientesTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: ShoeRepairClientes
+      TableName: !Sub 'ShoeRepairClientes${ResourceSuffix}'
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
@@ -139,7 +143,7 @@ Resources:
   ShoeRepairUsersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: ShoeRepairUsers
+      TableName: !Sub 'ShoeRepairUsers${ResourceSuffix}'
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
@@ -159,7 +163,7 @@ Resources:
   ShoeRepairPedidosTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: ShoeRepairPedidos
+      TableName: !Sub 'ShoeRepairPedidos${ResourceSuffix}'
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
@@ -170,7 +174,7 @@ Resources:
   ShoeRepairCountersTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: ShoeRepairCounters
+      TableName: !Sub 'ShoeRepairCounters${ResourceSuffix}'
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
@@ -181,7 +185,7 @@ Resources:
   ShoeRepairFuncionariosTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: ShoeRepairFuncionarios
+      TableName: !Sub 'ShoeRepairFuncionarios${ResourceSuffix}'
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S

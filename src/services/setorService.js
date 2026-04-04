@@ -263,10 +263,10 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
   };
   
   // Se chegou no atendimento final, marcar como finalizado e enviar email
-  if (isFinalStatus(statusLegivel) || novoSetorId === 'atendimento-final') {
+  if (novoSetorId === 'atendimento-final') {
     updates.dataEntregaReal = agora.split('T')[0];
     
-    console.log('[SetorService] Pedido chegou ao setor final, enviando email...');
+    console.log('[SetorService] Pedido chegou ao setor final - atendimento-final, enviando email...');
     
     // Enviar email de finalização
     try {
