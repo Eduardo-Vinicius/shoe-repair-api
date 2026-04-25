@@ -75,199 +75,155 @@ function gerarConteudoEmail(nomeCliente, status, descricaoServicos, modeloTenis,
   const fotosAssinadas = assinarFotosEmail(fotos);
   const statusNormalizado = normalizeStatus(status, { strict: false, fallback: String(status || '') });
   const statusLower = String(statusNormalizado || status || '').toLowerCase();
-  
-  // Gerar HTML das fotos se existirem
+  const clienteNome = nomeCliente || 'Cliente';
+  const servicos = descricaoServicos || 'Serviços diversos';
+  const modelo = modeloTenis || 'Tênis';
+  const codigo = codigoPedido || 'N/A';
+  const marca = 'A Casa do Tênis';
+
+  let titulo = 'Atualização do seu pedido';
+  let destaque = 'Estamos cuidando de cada etapa do seu pedido.';
+  let corPrincipal = '#c96b2c';
+  let assunto = `A Casa do Tênis | Pedido #${codigo} atualizado`;
+  let resumoStatus = statusNormalizado || status || 'Em andamento';
+
+  if (
+    statusLower === 'criado' ||
+    statusLower === 'created' ||
+    statusLower.includes('aguardando') ||
+    statusNormalizado === ORDER_STATUS.ATENDIMENTO_RECEBIDO
+  ) {
+    titulo = 'Pedido recebido com sucesso';
+    destaque = 'Seu par chegou por aqui e nossa equipe ja iniciou o acompanhamento.';
+    corPrincipal = '#2f7d4a';
+    assunto = `A Casa do Tênis | Pedido #${codigo} recebido`;
+    resumoStatus = 'Recebido';
+  } else if (isFinalStatus(statusNormalizado)) {
+    titulo = 'Seu pedido esta pronto para retirada';
+    destaque = 'Finalizamos o servico e seu tenis esta pronto para voltar com voce.';
+    corPrincipal = '#1f5fbf';
+    assunto = `A Casa do Tênis | Pedido #${codigo} pronto para retirada`;
+    resumoStatus = 'Finalizado';
+  }
+
   let fotosHtml = '';
   if (fotosAssinadas && fotosAssinadas.length > 0) {
     fotosHtml = `
-      <div class="info-box">
-        <h3>📸 Fotos do Pedido</h3>
-        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
+      <div class="section-card">
+        <h3>Fotos do pedido</h3>
+        <div class="photos-grid">
           ${fotosAssinadas.map(foto => `
-            <img src="${foto}" alt="Foto do pedido" style="width: 150px; height: 150px; object-fit: cover; border-radius: 5px; border: 2px solid #ddd;" />
+            <img src="${foto}" alt="Foto do pedido" class="photo-item" />
           `).join('')}
         </div>
       </div>
     `;
   }
 
-  // Email de criação do pedido
-  if (
-    statusLower === "criado" ||
-    statusLower === "created" ||
-    statusLower.includes("aguardando") ||
-    statusNormalizado === ORDER_STATUS.ATENDIMENTO_RECEBIDO
-  ) {
-    return {
-      subject: `✅ Pedido #${codigoPedido} - Confirmação de Recebimento`,
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
-            .content { background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd; }
-            .footer { background-color: #f1f1f1; padding: 15px; text-align: center; font-size: 12px; color: #666; border-radius: 0 0 5px 5px; }
-            .info-box { background-color: white; padding: 15px; margin: 10px 0; border-left: 4px solid #4CAF50; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>🎉 Pedido Confirmado!</h1>
-            </div>
-            <div class="content">
-              <p>Olá <strong>${nomeCliente}</strong>,</p>
-              <p>Recebemos seu pedido com sucesso! Já estamos preparando tudo para cuidar do seu tênis.</p>
-              <div class="info-box">
-                <h3>📦 Detalhes do Pedido</h3>
-                <p><strong>Código:</strong> #${codigoPedido}</p>
-                <p><strong>Tênis:</strong> ${modeloTenis}</p>
-                <p><strong>Serviços:</strong> ${descricaoServicos}</p>
-              </div>
-              ${fotosHtml}
-              <p>Você receberá atualizações por email sempre que o status do seu pedido mudar.</p>
-              <p>Obrigado pela confiança! 🙏</p>
-            </div>
-            <div class="footer">
-              <p>Este é um email automático. Para dúvidas, responda este email ou entre em contato conosco.</p>
-            </div>
-          </div>
-        </body>
-        </html>
-      `,
-      text: `
-Olá ${nomeCliente},
-
-Recebemos seu pedido com sucesso!
-
-Detalhes do Pedido:
-- Código: #${codigoPedido}
-- Tênis: ${modeloTenis}
-- Serviços: ${descricaoServicos}
-
-Você receberá atualizações por email sempre que o status mudar.
-
-Obrigado pela confiança!
-      `,
-    };
-  }
-
-  // Email de pedido finalizado
-  if (isFinalStatus(statusNormalizado)) {
-    return {
-      subject: `🎊 Pedido #${codigoPedido} - Finalizado! Pronto para Retirada`,
-      html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #2196F3; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
-            .content { background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd; }
-            .footer { background-color: #f1f1f1; padding: 15px; text-align: center; font-size: 12px; color: #666; border-radius: 0 0 5px 5px; }
-            .info-box { background-color: white; padding: 15px; margin: 10px 0; border-left: 4px solid #2196F3; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>🎊 Seu Pedido Está Pronto!</h1>
-            </div>
-            <div class="content">
-              <p>Olá <strong>${nomeCliente}</strong>,</p>
-              <p>Ótimas notícias! Seu pedido foi finalizado e está pronto para retirada! 🎉</p>
-              <div class="info-box">
-                <h3>📦 Detalhes do Pedido</h3>
-                <p><strong>Código:</strong> #${codigoPedido}</p>
-                <p><strong>Tênis:</strong> ${modeloTenis}</p>
-                <p><strong>Serviços Realizados:</strong> ${descricaoServicos}</p>
-              </div>
-              ${fotosHtml}
-              <p>Agradecemos pela confiança e esperamos vê-lo em breve! 🙏</p>
-            </div>
-            <div class="footer">
-              <p>Este é um email automático. Para dúvidas, responda este email ou entre em contato conosco.</p>
-            </div>
-          </div>
-        </body>
-        </html>
-      `,
-      text: `
-Olá ${nomeCliente},
-
-Ótimas notícias! Seu pedido foi finalizado e está pronto para retirada!
-
-Detalhes do Pedido:
-- Código: #${codigoPedido}
-- Tênis: ${modeloTenis}
-- Serviços Realizados: ${descricaoServicos}
-
-Agradecemos pela confiança!
-      `,
-    };
-  }
-
-  // Email de atualização de status genérico
-  return {
-    subject: `📢 Pedido #${codigoPedido} - Atualização de Status`,
-    html: `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background-color: #FF9800; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
-          .content { background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd; }
-          .footer { background-color: #f1f1f1; padding: 15px; text-align: center; font-size: 12px; color: #666; border-radius: 0 0 5px 5px; }
-          .info-box { background-color: white; padding: 15px; margin: 10px 0; border-left: 4px solid #FF9800; }
-        </style>
-      </head>
-      <body>
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { margin: 0; padding: 0; background-color: #f5efe8; font-family: Georgia, 'Times New Roman', serif; color: #2c241f; }
+        .wrapper { width: 100%; padding: 24px 12px; box-sizing: border-box; }
+        .container { max-width: 640px; margin: 0 auto; background: #fffaf5; border-radius: 22px; overflow: hidden; box-shadow: 0 14px 40px rgba(79, 49, 23, 0.12); }
+        .header { background: linear-gradient(135deg, ${corPrincipal} 0%, #2c241f 100%); color: #fff8f1; padding: 36px 32px 28px; }
+        .brand { font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.8; margin-bottom: 12px; }
+        .header h1 { margin: 0; font-size: 30px; line-height: 1.2; }
+        .header p { margin: 12px 0 0; font-size: 16px; line-height: 1.6; max-width: 460px; }
+        .content { padding: 28px 32px 18px; }
+        .intro { font-size: 17px; line-height: 1.7; margin: 0 0 22px; }
+        .status-badge { display: inline-block; background: #f3e3d5; color: ${corPrincipal}; border-radius: 999px; padding: 8px 14px; font-size: 12px; font-weight: bold; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 20px; }
+        .section-card { background: #ffffff; border: 1px solid #ecd9c9; border-radius: 18px; padding: 20px; margin-bottom: 18px; }
+        .section-card h3 { margin: 0 0 14px; font-size: 18px; color: #2c241f; }
+        .detail-row { padding: 10px 0; border-bottom: 1px solid #f0e6dc; font-size: 15px; }
+        .detail-row:last-child { border-bottom: none; padding-bottom: 0; }
+        .detail-label { display: inline-block; min-width: 110px; font-weight: bold; color: #6c5748; }
+        .timeline { margin: 0; padding-left: 18px; color: #5a473b; }
+        .timeline li { margin-bottom: 10px; }
+        .photos-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+        .photo-item { width: 136px; height: 136px; object-fit: cover; border-radius: 14px; border: 1px solid #e8d5c3; }
+        .footer { background: #f1e3d4; padding: 20px 32px 28px; font-size: 13px; line-height: 1.6; color: #5a473b; }
+        .footer strong { color: #2c241f; }
+        @media only screen and (max-width: 640px) {
+          .wrapper { padding: 0; }
+          .container { border-radius: 0; }
+          .header, .content, .footer { padding-left: 20px; padding-right: 20px; }
+          .header h1 { font-size: 26px; }
+          .photo-item { width: calc(50% - 5px); height: 120px; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="wrapper">
         <div class="container">
           <div class="header">
-            <h1>📢 Atualização do Pedido</h1>
+            <div class="brand">${marca}</div>
+            <h1>${titulo}</h1>
+            <p>${destaque}</p>
           </div>
           <div class="content">
-            <p>Olá <strong>${nomeCliente}</strong>,</p>
-            <p>Seu pedido teve uma atualização de status!</p>
-            <div class="info-box">
-              <h3>📦 Detalhes do Pedido</h3>
-              <p><strong>Código:</strong> #${codigoPedido}</p>
-              <p><strong>Tênis:</strong> ${modeloTenis}</p>
-              <p><strong>Serviços:</strong> ${descricaoServicos}</p>
-              <p><strong>Status Atual:</strong> ${status}</p>
+            <div class="status-badge">${resumoStatus}</div>
+            <p class="intro">Olá <strong>${clienteNome}</strong>, seu pedido <strong>#${codigo}</strong> segue acompanhado pela equipe da ${marca}. Abaixo estao os detalhes desta etapa.</p>
+
+            <div class="section-card">
+              <h3>Resumo do pedido</h3>
+              <div class="detail-row"><span class="detail-label">Codigo</span> #${codigo}</div>
+              <div class="detail-row"><span class="detail-label">Tenis</span> ${modelo}</div>
+              <div class="detail-row"><span class="detail-label">Servicos</span> ${servicos}</div>
+              <div class="detail-row"><span class="detail-label">Status</span> ${statusNormalizado || status || 'Em andamento'}</div>
             </div>
+
+            <div class="section-card">
+              <h3>O que acontece agora</h3>
+              <ul class="timeline">
+                <li>Nos acompanhamos cada etapa do processo e avisamos por email quando houver movimentacao.</li>
+                <li>Se precisar tirar duvidas, voce pode responder este email e nosso time segue o atendimento.</li>
+                <li>Quando o pedido estiver pronto, voce recebera uma nova confirmacao com o aviso de retirada.</li>
+              </ul>
+            </div>
+
             ${fotosHtml}
-            <p>Obrigado pela confiança! 🙏</p>
           </div>
           <div class="footer">
-            <p>Este é um email automático. Para dúvidas, responda este email ou entre em contato conosco.</p>
+            <strong>${marca}</strong><br />
+            Cuidado especializado para limpar, restaurar e entregar seu tenis com atencao em cada detalhe.<br /><br />
+            Este email foi enviado automaticamente para acompanhar o andamento do seu pedido. Se precisar de ajuda, basta responder esta mensagem.
           </div>
         </div>
-      </body>
-      </html>
-    `,
-    text: `
-Olá ${nomeCliente},
+      </div>
+    </body>
+    </html>
+  `;
 
-Seu pedido teve uma atualização de status!
+  const text = [
+    `${marca}`,
+    '',
+    `Olá ${clienteNome},`,
+    '',
+    destaque,
+    '',
+    'Resumo do pedido:',
+    `- Codigo: #${codigo}`,
+    `- Tenis: ${modelo}`,
+    `- Servicos: ${servicos}`,
+    `- Status: ${statusNormalizado || status || 'Em andamento'}`,
+    '',
+    'Proximos passos:',
+    '- Vamos avisar por email sempre que houver uma nova etapa.',
+    '- Se precisar, responda esta mensagem para falar com a equipe.',
+    '',
+    'Obrigado pela confiança,',
+    marca
+  ].join('\n');
 
-Detalhes do Pedido:
-- Código: #${codigoPedido}
-- Tênis: ${modeloTenis}
-- Serviços: ${descricaoServicos}
-- Status Atual: ${status}
-
-Obrigado pela confiança!
-    `,
+  return {
+    subject: assunto,
+    html,
+    text,
   };
 }
 
@@ -279,6 +235,12 @@ const ses = new AWS.SES({
 
 const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'noreply@yourdomain.com';
 const REPLY_TO_EMAIL = process.env.SES_REPLY_TO_EMAIL || FROM_EMAIL;
+const EMAIL_FROM_NAME = (process.env.EMAIL_FROM_NAME || process.env.GMAIL_FROM_NAME || 'A Casa do Tênis').trim();
+
+function montarRemetente(email) {
+  const remetenteEmail = String(email || process.env.GMAIL_USER || FROM_EMAIL).trim();
+  return `"${EMAIL_FROM_NAME}" <${remetenteEmail}>`;
+}
 
 // Função para enviar e-mail via Nodemailer (Gmail)
 // Mantém compatibilidade CommonJS (sem `export`)
@@ -308,7 +270,7 @@ async function enviarEmail(to, subject, order, status) {
   );
 
   const mailOptions = {
-    from: process.env.GMAIL_USER,
+    from: montarRemetente(process.env.GMAIL_USER),
     to,
     subject: (subject && String(subject).trim()) ? subject : conteudo.subject,
     html: conteudo.html,
@@ -604,12 +566,20 @@ async function enviarStatusPedido(emailCliente, nomeCliente, status, descricaoSe
     return;
   }
 
+  const { subject, html, text } = gerarConteudoEmail(
+    nomeCliente,
+    status,
+    descricaoServicos,
+    modeloTenis,
+    codigoPedido,
+    fotos
+  );
+  const startTime = Date.now();
+
   try {
-    const { subject, html, text } = gerarConteudoEmail(nomeCliente, status, descricaoServicos, modeloTenis, codigoPedido, fotos);
-    
     // Configuração do email usando Nodemailer (Gmail)
     const mailOptions = {
-      from: `"Shoe Repair" <${process.env.GMAIL_USER}>`,
+      from: montarRemetente(process.env.GMAIL_USER),
       to: emailCliente,
       subject: subject,
       text: text,
@@ -620,10 +590,11 @@ async function enviarStatusPedido(emailCliente, nomeCliente, status, descricaoSe
     console.log('[Email] 📧 Enviando email via Gmail...', {
       to: emailCliente,
       subject,
-      from: process.env.GMAIL_USER
+      from: mailOptions.from,
+      status,
+      codigoPedido
     });
 
-    const startTime = Date.now();
     const result = await transporter.sendMail(mailOptions);
     const duration = Date.now() - startTime;
 
@@ -664,6 +635,7 @@ async function enviarStatusPedido(emailCliente, nomeCliente, status, descricaoSe
 
     return result;
   } catch (err) {
+    const duration = Date.now() - startTime;
     // ❌ ERRO: Log estruturado de auditoria
     const auditErrorLog = {
       timestamp: new Date().toISOString(),
@@ -672,8 +644,12 @@ async function enviarStatusPedido(emailCliente, nomeCliente, status, descricaoSe
       emailCliente,
       status,
       resultado: 'ERRO',
+      assunto: subject,
+      remetente: montarRemetente(process.env.GMAIL_USER),
       errorMessage: err.message,
-      errorCode: err.code
+      errorCode: err.code,
+      errorResponse: err.response,
+      duracaoMs: duration
     };
     console.error('[Email] 📋 AUDITORIA:', auditErrorLog);
     
@@ -687,15 +663,19 @@ async function enviarStatusPedido(emailCliente, nomeCliente, status, descricaoSe
       status: 'erro',
       mensagem: `Erro ao enviar email: ${err.message}`,
       errorCode: err.code,
-      duracaoMs: Date.now() - startTime
+      duracaoMs: duration
     }).catch(errLog => console.warn('[Email] Aviso: Log de erro não foi persistido:', errLog.message));
     
     console.error('[Email] ❌ Erro ao enviar email:', {
       emailCliente,
       nomeCliente,
       status,
+      codigoPedido,
+      subject,
+      from: montarRemetente(process.env.GMAIL_USER),
       errorMessage: err.message,
       errorCode: err.code,
+      errorResponse: err.response,
       stack: err.stack,
       timestamp: new Date().toISOString()
     });

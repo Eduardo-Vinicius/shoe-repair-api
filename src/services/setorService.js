@@ -262,36 +262,55 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
     statusHistory: [...(pedido.statusHistory || []), novoHistoricoStatus]
   };
   
-  // Se chegou no atendimento final, marcar como finalizado e enviar email
+  // Se chegou no atendimento final, marcar como finalizado
   if (novoSetorId === 'atendimento-final') {
     updates.dataEntregaReal = agora.split('T')[0];
-    
-    console.log('[SetorService] Pedido chegou ao setor final - atendimento-final, enviando email...');
-    
-    // Enviar email de finalização
-    try {
-      const clienteService = require('./clienteService');
-      const cliente = await clienteService.getCliente(pedido.clienteId);
-      
-      if (cliente && cliente.email && cliente.nome) {
-        await emailService.enviarStatusPedido(
-          cliente.email,
-          cliente.nome,
-          ORDER_STATUS.ATENDIMENTO_FINALIZADO,
-          pedido.descricaoServicos || pedido.servicos?.map(s => s.nome).join(', ') || 'Serviços diversos',
-          pedido.modeloTenis || 'Tênis',
-          pedido.codigo
-        );
-        console.log('[SetorService] Email de finalização enviado com sucesso');
-      }
-    } catch (emailError) {
-      console.error('[SetorService] Erro ao enviar email de finalização:', emailError);
-      // Não falhar a operação se email falhar
-    }
   }
   
   // Atualizar pedido
   const pedidoAtualizado = await pedidoService.updatePedido(pedidoId, updates);
+
+  try {
+    const clienteService = require('./clienteService');
+    const cliente = await clienteService.getCliente(pedido.clienteId);
+
+    if (cliente && cliente.email) {
+      console.log('[SetorService] Enviando email de andamento do pedido...', {
+        pedidoId,
+        codigoPedido: pedido.codigo,
+        emailCliente: cliente.email,
+        status: statusLegivel,
+        setor: setor.nome
+      });
+
+      await emailService.enviarStatusPedido(
+        cliente.email,
+        cliente.nome || 'Cliente',
+        statusLegivel,
+        pedido.descricaoServicos || pedido.servicos?.map(s => s.nome).join(', ') || 'Serviços diversos',
+        pedido.modeloTenis || 'Tênis',
+        pedido.codigo,
+        pedido.fotos || []
+      );
+
+      console.log('[SetorService] Email de andamento enviado com sucesso');
+    } else {
+      console.log('[SetorService] Cliente sem email cadastrado; envio de email ignorado', {
+        pedidoId,
+        clienteId: pedido.clienteId,
+        status: statusLegivel
+      });
+    }
+  } catch (emailError) {
+    console.error('[SetorService] Erro ao enviar email de andamento:', {
+      pedidoId,
+      codigoPedido: pedido.codigo,
+      status: statusLegivel,
+      message: emailError.message,
+      stack: emailError.stack
+    });
+    // Não falhar a operação se email falhar
+  }
   
   console.log('[SetorService] Pedido movido com sucesso para:', setor.nome);
   
