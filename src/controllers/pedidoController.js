@@ -174,7 +174,6 @@ function assinarFotosPedido(pedido) {
  */
 async function enviarNotificacoesPedido(pedido, status = null) {
   try {
-    // ✅ VALIDAÇÃO CRÍTICA: Email APENAS se setor atual é 'atendimento-final'
     console.log('[Notificações] 🔔 Iniciando envio de notificações:', {
       pedidoId: pedido.id,
       codigo: pedido.codigo,
@@ -182,15 +181,6 @@ async function enviarNotificacoesPedido(pedido, status = null) {
       status: status || pedido.status,
       clienteId: pedido.clienteId
     });
-
-    // NÃO enviar notificações se o setor não for 'atendimento-final'
-    if (pedido.setorAtual !== 'atendimento-final') {
-      console.log('[Notificações] ⏭️ Email NÃO enviado - pedido ainda não chegou em atendimento-final', {
-        setorAtual: pedido.setorAtual,
-        status: status || pedido.status
-      });
-      return;
-    }
 
     if (!pedido.clienteId) {
       console.log('[Notificações] ❌ ClienteId não encontrado no pedido');
@@ -241,9 +231,8 @@ async function enviarNotificacoesPedido(pedido, status = null) {
       console.log('[Notificações] ⚠️ Cliente sem email cadastrado');
     }
 
-    // SMS é enviado automaticamente pelo emailService quando aplicável
-    // (apenas para status finalizados - economia)
-    if (cliente.telefone) {
+    // SMS segue restrito a status finais
+    if (cliente.telefone && normalizeStatus(statusFinal, { strict: false, fallback: statusFinal }) === ORDER_STATUS.ATENDIMENTO_FINALIZADO) {
       console.log('[Notificações] 📱 Enviando SMS para:', cliente.telefone);
       await emailService.enviarSMSStatus(
         cliente.telefone,
@@ -927,10 +916,6 @@ exports.updatePedidoStatus = async (req, res) => {
         novoStatus
       );
 
-      if (!pedidoMovido?._noMovement) {
-        await enviarNotificacoesPedido(pedidoMovido, pedidoMovido.status || novoStatus);
-      }
-
       const pedidoResposta = assinarFotosPedido(pedidoMovido);
 
       return res.status(200).json({
@@ -1369,13 +1354,6 @@ exports.moverParaSetor = async (req, res) => {
         data: assinarFotosPedido(pedidoAtualizado)
       });
     }
-
-    // Enviar notificações sobre mudança de setor
-    const setores = setorService.listarSetores();
-    const setor = setores.find(s => s.id === setorIdResolvido);
-    const nomeSetor = setor ? setor.nome : setorIdResolvido;
-    const statusTexto = pedidoAtualizado?.status || `Em produção - ${nomeSetor}`;
-    await enviarNotificacoesPedido(pedidoAtualizado, statusTexto);
 
     res.status(200).json({
       success: true,

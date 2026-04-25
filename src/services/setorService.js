@@ -17,6 +17,63 @@ function getSetor(setorId) {
   return SETORES_PADRAO.find(setor => setor.id === setorId);
 }
 
+async function notificarClienteSobreMovimentacao(pedido, status, setorNome = null) {
+  try {
+    if (!pedido?.clienteId) {
+      console.log('[SetorService] Pedido sem clienteId; email de movimentacao ignorado', {
+        pedidoId: pedido?.id,
+        status
+      });
+      return;
+    }
+
+    const clienteService = require('./clienteService');
+    const cliente = await clienteService.getCliente(pedido.clienteId);
+
+    if (!cliente?.email) {
+      console.log('[SetorService] Cliente sem email cadastrado; envio de email ignorado', {
+        pedidoId: pedido?.id,
+        clienteId: pedido?.clienteId,
+        status
+      });
+      return;
+    }
+
+    console.log('[SetorService] Enviando email de andamento do pedido...', {
+      pedidoId: pedido.id,
+      codigoPedido: pedido.codigo,
+      emailCliente: cliente.email,
+      status,
+      setor: setorNome || pedido.departamento || pedido.setorAtual
+    });
+
+    await emailService.enviarStatusPedido(
+      cliente.email,
+      cliente.nome || 'Cliente',
+      status,
+      pedido.descricaoServicos || pedido.servicos?.map(s => s.nome).join(', ') || 'Serviços diversos',
+      pedido.modeloTenis || 'Tênis',
+      pedido.codigo,
+      pedido.fotos || []
+    );
+
+    console.log('[SetorService] Email de andamento enviado com sucesso', {
+      pedidoId: pedido.id,
+      status,
+      setor: setorNome || pedido.departamento || pedido.setorAtual
+    });
+  } catch (emailError) {
+    console.error('[SetorService] Erro ao enviar email de andamento:', {
+      pedidoId: pedido?.id,
+      codigoPedido: pedido?.codigo,
+      status,
+      setor: setorNome || pedido?.departamento || pedido?.setorAtual,
+      message: emailError.message,
+      stack: emailError.stack
+    });
+  }
+}
+
 /**
  * Determina quais setores o pedido deve passar baseado nos serviços
  * @param {Array} servicos - Array de serviços do pedido
@@ -177,6 +234,14 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
       status: statusNormalizado
     });
 
+    if (statusNormalizado !== pedido.status) {
+      await notificarClienteSobreMovimentacao(
+        pedidoAtualizadoMesmoSetor,
+        statusNormalizado,
+        setor.nome
+      );
+    }
+
     return pedidoAtualizadoMesmoSetor;
   }
 
@@ -270,47 +335,7 @@ async function moverPedidoParaSetor(pedidoId, novoSetorId, usuario, funcionarioN
   // Atualizar pedido
   const pedidoAtualizado = await pedidoService.updatePedido(pedidoId, updates);
 
-  try {
-    const clienteService = require('./clienteService');
-    const cliente = await clienteService.getCliente(pedido.clienteId);
-
-    if (cliente && cliente.email) {
-      console.log('[SetorService] Enviando email de andamento do pedido...', {
-        pedidoId,
-        codigoPedido: pedido.codigo,
-        emailCliente: cliente.email,
-        status: statusLegivel,
-        setor: setor.nome
-      });
-
-      await emailService.enviarStatusPedido(
-        cliente.email,
-        cliente.nome || 'Cliente',
-        statusLegivel,
-        pedido.descricaoServicos || pedido.servicos?.map(s => s.nome).join(', ') || 'Serviços diversos',
-        pedido.modeloTenis || 'Tênis',
-        pedido.codigo,
-        pedido.fotos || []
-      );
-
-      console.log('[SetorService] Email de andamento enviado com sucesso');
-    } else {
-      console.log('[SetorService] Cliente sem email cadastrado; envio de email ignorado', {
-        pedidoId,
-        clienteId: pedido.clienteId,
-        status: statusLegivel
-      });
-    }
-  } catch (emailError) {
-    console.error('[SetorService] Erro ao enviar email de andamento:', {
-      pedidoId,
-      codigoPedido: pedido.codigo,
-      status: statusLegivel,
-      message: emailError.message,
-      stack: emailError.stack
-    });
-    // Não falhar a operação se email falhar
-  }
+  await notificarClienteSobreMovimentacao(pedidoAtualizado, statusLegivel, setor.nome);
   
   console.log('[SetorService] Pedido movido com sucesso para:', setor.nome);
   
