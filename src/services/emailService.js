@@ -81,11 +81,18 @@ function gerarConteudoEmail(nomeCliente, status, descricaoServicos, modeloTenis,
   const codigo = codigoPedido || 'N/A';
   const marca = 'A Casa do Tênis';
 
-  let titulo = 'Atualização do seu pedido';
-  let destaque = 'Estamos cuidando de cada etapa do seu pedido.';
-  let corPrincipal = '#c96b2c';
-  let assunto = `A Casa do Tênis | Pedido #${codigo} atualizado`;
+  let titulo = 'Seu pedido avancou para uma nova etapa';
+  let destaque = 'Seguimos acompanhando seu tenis com cuidado artesanal e atualizacoes claras ao longo do processo.';
+  let corPrincipal = '#9a5b2a';
+  let assunto = `${marca} | Pedido #${codigo} em nova etapa`;
   let resumoStatus = statusNormalizado || status || 'Em andamento';
+  let etiqueta = 'Acompanhamento';
+  let mensagemCurta = 'Seu pedido segue em producao, com acompanhamento da equipe em cada movimentacao.';
+  let proximosPassos = [
+    'Nossa equipe acompanha a etapa atual e registra a proxima movimentacao do pedido.',
+    'Se precisar de alguma informacao adicional, basta responder este email.',
+    'Quando houver uma nova mudanca, voce recebe outro aviso automaticamente.'
+  ];
 
   if (
     statusLower === 'criado' ||
@@ -94,16 +101,33 @@ function gerarConteudoEmail(nomeCliente, status, descricaoServicos, modeloTenis,
     statusNormalizado === ORDER_STATUS.ATENDIMENTO_RECEBIDO
   ) {
     titulo = 'Pedido recebido com sucesso';
-    destaque = 'Seu par chegou por aqui e nossa equipe ja iniciou o acompanhamento.';
-    corPrincipal = '#2f7d4a';
-    assunto = `A Casa do Tênis | Pedido #${codigo} recebido`;
+    destaque = 'Recebemos seu tenis e iniciamos o acompanhamento para que cada etapa aconteca com clareza, cuidado e previsibilidade.';
+    corPrincipal = '#2f6b53';
+    assunto = `${marca} | Pedido #${codigo} recebido com sucesso`;
     resumoStatus = 'Recebido';
+    etiqueta = 'Recebimento confirmado';
+    mensagemCurta = 'Seu pedido entrou oficialmente no nosso fluxo de atendimento.';
+    proximosPassos = [
+      'Vamos validar os detalhes do servico e encaminhar seu pedido para a etapa correta.',
+      'Voce continuara recebendo emails conforme o tenis avancar no processo.',
+      'Se quiser complementar alguma informacao, responda este email.'
+    ];
   } else if (isFinalStatus(statusNormalizado)) {
     titulo = 'Seu pedido esta pronto para retirada';
-    destaque = 'Finalizamos o servico e seu tenis esta pronto para voltar com voce.';
-    corPrincipal = '#1f5fbf';
-    assunto = `A Casa do Tênis | Pedido #${codigo} pronto para retirada`;
+    destaque = 'Concluimos o servico e seu tenis esta pronto para voltar com voce, revisado e preparado para retirada.';
+    corPrincipal = '#1f4f8f';
+    assunto = `${marca} | Pedido #${codigo} pronto para retirada`;
     resumoStatus = 'Finalizado';
+    etiqueta = 'Retirada disponivel';
+    mensagemCurta = 'Seu pedido foi finalizado e esta aguardando retirada.';
+    proximosPassos = [
+      'Seu tenis ja esta disponivel para retirada.',
+      'Se precisar alinhar horario ou confirmar algum detalhe, responda este email.',
+      'Agradecemos pela confiança em nosso trabalho.'
+    ];
+  } else {
+    etiqueta = 'Nova movimentacao';
+    mensagemCurta = `O status atual do pedido e ${statusNormalizado || status || 'Em andamento'}.`;
   }
 
   let fotosHtml = '';
@@ -127,17 +151,23 @@ function gerarConteudoEmail(nomeCliente, status, descricaoServicos, modeloTenis,
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <style>
-        body { margin: 0; padding: 0; background-color: #f5efe8; font-family: Georgia, 'Times New Roman', serif; color: #2c241f; }
-        .wrapper { width: 100%; padding: 24px 12px; box-sizing: border-box; }
-        .container { max-width: 640px; margin: 0 auto; background: #fffaf5; border-radius: 22px; overflow: hidden; box-shadow: 0 14px 40px rgba(79, 49, 23, 0.12); }
-        .header { background: linear-gradient(135deg, ${corPrincipal} 0%, #2c241f 100%); color: #fff8f1; padding: 36px 32px 28px; }
-        .brand { font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.8; margin-bottom: 12px; }
-        .header h1 { margin: 0; font-size: 30px; line-height: 1.2; }
-        .header p { margin: 12px 0 0; font-size: 16px; line-height: 1.6; max-width: 460px; }
-        .content { padding: 28px 32px 18px; }
-        .intro { font-size: 17px; line-height: 1.7; margin: 0 0 22px; }
-        .status-badge { display: inline-block; background: #f3e3d5; color: ${corPrincipal}; border-radius: 999px; padding: 8px 14px; font-size: 12px; font-weight: bold; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 20px; }
-        .section-card { background: #ffffff; border: 1px solid #ecd9c9; border-radius: 18px; padding: 20px; margin-bottom: 18px; }
+        body { margin: 0; padding: 0; background: radial-gradient(circle at top, #f4ece2 0%, #efe2d3 38%, #e9dccd 100%); font-family: Georgia, 'Times New Roman', serif; color: #2c241f; }
+        .wrapper { width: 100%; padding: 26px 12px; box-sizing: border-box; }
+        .container { max-width: 660px; margin: 0 auto; background: #fffdfa; border-radius: 26px; overflow: hidden; box-shadow: 0 18px 44px rgba(70, 42, 20, 0.14); border: 1px solid rgba(154, 91, 42, 0.12); }
+        .header { background: linear-gradient(135deg, ${corPrincipal} 0%, #2a211d 100%); color: #fffaf5; padding: 38px 34px 30px; position: relative; }
+        .header:after { content: ''; position: absolute; inset: auto -60px -90px auto; width: 220px; height: 220px; border-radius: 50%; background: rgba(255, 255, 255, 0.08); }
+        .brand { font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; opacity: 0.82; margin-bottom: 14px; position: relative; z-index: 1; }
+        .header h1 { margin: 0; font-size: 32px; line-height: 1.15; position: relative; z-index: 1; max-width: 470px; }
+        .header p { margin: 14px 0 0; font-size: 16px; line-height: 1.7; max-width: 480px; position: relative; z-index: 1; color: rgba(255, 248, 241, 0.92); }
+        .content { padding: 30px 34px 20px; }
+        .status-badge { display: inline-block; background: #f3e4d7; color: ${corPrincipal}; border-radius: 999px; padding: 9px 15px; font-size: 12px; font-weight: bold; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 18px; }
+        .intro-card { background: linear-gradient(180deg, #fff8f1 0%, #fffdfb 100%); border: 1px solid #eedcc9; border-radius: 22px; padding: 20px 22px; margin-bottom: 18px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75); }
+        .intro-card p { margin: 0; font-size: 17px; line-height: 1.75; }
+        .highlights { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+        .highlight-card { background: #fbf3ea; border: 1px solid #ecd9c9; border-radius: 18px; padding: 16px; }
+        .highlight-label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: #8a735f; margin-bottom: 8px; }
+        .highlight-value { display: block; font-size: 18px; line-height: 1.5; color: #2c241f; }
+        .section-card { background: #ffffff; border: 1px solid #ecd9c9; border-radius: 20px; padding: 22px; margin-bottom: 18px; }
         .section-card h3 { margin: 0 0 14px; font-size: 18px; color: #2c241f; }
         .detail-row { padding: 10px 0; border-bottom: 1px solid #f0e6dc; font-size: 15px; }
         .detail-row:last-child { border-bottom: none; padding-bottom: 0; }
@@ -146,13 +176,15 @@ function gerarConteudoEmail(nomeCliente, status, descricaoServicos, modeloTenis,
         .timeline li { margin-bottom: 10px; }
         .photos-grid { display: flex; flex-wrap: wrap; gap: 10px; }
         .photo-item { width: 136px; height: 136px; object-fit: cover; border-radius: 14px; border: 1px solid #e8d5c3; }
-        .footer { background: #f1e3d4; padding: 20px 32px 28px; font-size: 13px; line-height: 1.6; color: #5a473b; }
+        .atelier-note { background: linear-gradient(90deg, rgba(154, 91, 42, 0.08) 0%, rgba(255, 255, 255, 0.65) 100%); border-left: 4px solid ${corPrincipal}; border-radius: 16px; padding: 16px 18px; margin-bottom: 18px; font-size: 15px; line-height: 1.7; color: #4c3c31; }
+        .footer { background: #f0e1d3; padding: 22px 34px 30px; font-size: 13px; line-height: 1.7; color: #5a473b; }
         .footer strong { color: #2c241f; }
         @media only screen and (max-width: 640px) {
           .wrapper { padding: 0; }
           .container { border-radius: 0; }
           .header, .content, .footer { padding-left: 20px; padding-right: 20px; }
           .header h1 { font-size: 26px; }
+          .highlights { grid-template-columns: 1fr; }
           .photo-item { width: calc(50% - 5px); height: 120px; }
         }
       </style>
@@ -166,8 +198,26 @@ function gerarConteudoEmail(nomeCliente, status, descricaoServicos, modeloTenis,
             <p>${destaque}</p>
           </div>
           <div class="content">
-            <div class="status-badge">${resumoStatus}</div>
-            <p class="intro">Olá <strong>${clienteNome}</strong>, seu pedido <strong>#${codigo}</strong> segue acompanhado pela equipe da ${marca}. Abaixo estao os detalhes desta etapa.</p>
+            <div class="status-badge">${etiqueta}</div>
+
+            <div class="intro-card">
+              <p>Olá <strong>${clienteNome}</strong>, o pedido <strong>#${codigo}</strong> continua sendo acompanhado pela equipe da ${marca}. ${mensagemCurta}</p>
+            </div>
+
+            <div class="highlights">
+              <div class="highlight-card">
+                <span class="highlight-label">Status atual</span>
+                <span class="highlight-value">${resumoStatus}</span>
+              </div>
+              <div class="highlight-card">
+                <span class="highlight-label">Pedido</span>
+                <span class="highlight-value">#${codigo}</span>
+              </div>
+            </div>
+
+            <div class="atelier-note">
+              ${destaque}
+            </div>
 
             <div class="section-card">
               <h3>Resumo do pedido</h3>
@@ -205,6 +255,7 @@ function gerarConteudoEmail(nomeCliente, status, descricaoServicos, modeloTenis,
     `Olá ${clienteNome},`,
     '',
     destaque,
+    mensagemCurta,
     '',
     'Resumo do pedido:',
     `- Codigo: #${codigo}`,
@@ -213,8 +264,7 @@ function gerarConteudoEmail(nomeCliente, status, descricaoServicos, modeloTenis,
     `- Status: ${statusNormalizado || status || 'Em andamento'}`,
     '',
     'Proximos passos:',
-    '- Vamos avisar por email sempre que houver uma nova etapa.',
-    '- Se precisar, responda esta mensagem para falar com a equipe.',
+    ...proximosPassos.map((item) => `- ${item}`),
     '',
     'Obrigado pela confiança,',
     marca
